@@ -727,7 +727,7 @@ Vite + React + Tailwind + router + `vercel.json`; deploy the empty app to Vercel
 - Header: building, room, phase badge, progress bar "Step 2 of 4".
 - One **StepCard** per screen (swipe or Next/Back): zone badge, item name, framing instruction.
 - **Move-out:** show the locked move-in photo + its timestamp + the student's move-in note above the capture button as a framing reference ("Match this angle").
-- **MediaCapture:** `<input type="file" accept="image/*,video/*" capture="environment">`, preview, notes textarea, **Retake** / **Remove** (only when `rules.canEditEvidence`).
+- **MediaCapture:** wraps **`CameraCapture`** (`src/student/CameraCapture.jsx`): a live in-page camera via `getUserMedia` + `MediaRecorder`. **No `<input type="file">` anywhere**, so students cannot upload from the camera roll. Photos are stamped with room/item/time. Then preview, notes textarea, **Retake** / **Remove** (only when `rules.canEditEvidence`). Pass the returned `blob` to `uploadStudentMedia` as `file`.
 - **PhotoCoach** chip under the preview: "Nemotron is checking your photo…" → ✅ "Looks good" or ⚠️ the retake tip. **Advisory only, never blocks.**
 - **Lock & Submit Official Inspection** → confirm dialog ("You can't change anything after this") → `lockInspection` → read-only summary showing server lock time.
 - **StudentSummary** (locked/completed): all items with before/after, statuses, fines, total due, and **Dispute this charge** on billable items (Increment 6).
@@ -950,7 +950,7 @@ Insert into `ai_unit_reports`. Return everything to the UI. If this call fails o
 7. **(15 s) Dispute:** the sink dispute → Nemotron evidence brief → admin waives → ✓ integrity badges → **Download PDF**.
 8. **(10 s) Close** on the "$ saved by students" KPI.
 
-**Q&A answers to prepare:** How is 2FA real? (Production: Supabase TOTP MFA + an RLS check on `aal2`; the demo uses a fixed code.) Can students upload old gallery photos? (`capture` prefers the camera; next step: flag photos whose EXIF capture time is far from upload time.) What if the AI is wrong? (It never sets a status or a fine; low confidence becomes "needs human review".)
+**Q&A answers to prepare:** How is 2FA real? (Production: Supabase TOTP MFA + an RLS check on `aal2`; the demo uses a fixed code.) Can students upload old gallery photos? (No: there is no file picker; evidence is captured from the live camera inside the page, and the DB stamps the time. Next step: short-lived per-capture upload tokens so the storage API can't be called directly.) What if the AI is wrong? (It never sets a status or a fine; low confidence becomes "needs human review".)
 
 ---
 
