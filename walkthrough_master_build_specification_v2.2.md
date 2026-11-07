@@ -1,7 +1,7 @@
-# 🛠️ Walkthrough — Master Build Specification (v2.2)
+# 🛠️ Walkthrough — Master Build Specification (v2.3)
 
 > **HackUTD · Target: NVIDIA challenge — "Use Nemotron beyond a chatbot"**
-> Native build edition · Repo: [`Walkthru-HackUTD`](https://github.com/aashwatSingh/Walkthru-HackUTD) · Stack: React (Vite) + Supabase (Postgres, Auth, Storage, Edge Functions) + NVIDIA Nemotron · Deploy: Vercel
+> Repo: [`Walkthru-HackUTD`](https://github.com/aashwatSingh/Walkthru-HackUTD) · Stack: React (Vite) + Supabase (Postgres, Auth, Storage, Edge Functions) + NVIDIA Nemotron · Deploy: Vercel
 
 > **How to use this file**
 > 1. Every teammate reads Sections 1–4 (10 minutes). That's the shared contract.
@@ -478,7 +478,7 @@ create policy "media: read own unit or admin" on storage.objects for select to a
 ```
 
 ### 4.3 What the database guarantees (use these as test cases)
-Run these from the browser console while signed in as the named user. Each one **must fail**:
+Run these from the browser console while signed in as the named user. Each one **must be blocked** (T5 is silently corrected; the rest fail with the error shown):
 
 | # | As | Attempt | Expected error |
 |---|---|---|---|
@@ -515,7 +515,7 @@ update profiles set full_name = 'Priya Nair'   where email = 'priya.nair@univers
 
 ### 4.5 `003_seed.sql` — sample data
 
-**Seed images:** put 6 photos in `public/seed/`: `door.jpg`, `desk.jpg` (visible scratch), `desk-water-ring.jpg`, `blinds.jpg`, `blinds-broken.jpg`, `sink.jpg` (hairline crack). **Best option: photograph a real room at the venue or hotel.** Real damage gives Nemotron something real to find. Don't hot-link external image URLs; they can break or be blocked on venue Wi‑Fi.
+**Seed images:** put 6 photos in `public/seed/`: `door.jpg`, `desk.jpg` (visible scratch), `desk-water-ring.jpg`, `blinds.jpg`, `blinds-broken.jpg`, `sink.jpg` (hairline crack). **Best option: photograph a real room at the venue or hotel.** Real damage gives Nemotron something real to find. Don't hot-link external image URLs; they can break or be blocked on venue Wi-Fi.
 
 **Compress the seed photos before committing them:** each must be **under 250 KB** and **at most 1200 px wide** (JPEG quality ≈ 80; lower it if a file is still over 250 KB). `ai-review` base64-encodes two photos per item inside an Edge Function, and small files keep it far from memory and payload limits. Use [Squoosh](https://squoosh.app) in the browser, or ImageMagick: `magick mogrify -resize '1200x>' -quality 80 public/seed/*.jpg`. Compress **before** running `hash-seed.mjs` so the fingerprints match the final files. Check sizes with `ls -lh public/seed`.
 
@@ -673,7 +673,7 @@ Everyone codes against these signatures from hour 1. If `VITE_SUPABASE_URL` is m
 | `getAiReviews(itemIds)`, `getLatestUnitReport(unitId)` | admin (+ student photo checks) | Latest result per item/kind |
 
 **Upload sequence** (`uploadStudentMedia`):
-1. Images: resize on a canvas to **max 1280 px** (longest side) at **JPEG quality 0.80**, about 150–250 KB per photo. Uploads stay fast on venue Wi-Fi and base64 payloads stay small for Nemotron. Videos: reject over **50 MB** or **30 s** with a friendly message.
+1. Images: resize on a canvas to **max 1280 px** (longest side) at **JPEG quality 0.80**, about 150–250 KB per photo. Uploads stay fast on venue Wi-Fi and base64 payloads stay small for Nemotron. Videos: `CameraCapture` stops recording at **15 s**; also reject anything over **50 MB** with a friendly message.
    ```js
    // src/lib/image.js
    export async function compressImage(file, maxSide = 1280, quality = 0.8) {
@@ -712,7 +712,7 @@ Vite + React + Tailwind + router + `vercel.json`; deploy the empty app to Vercel
 
 ### Increment 1 — Data layer
 `001`/`002`/`003` SQL run; demo users created; `dbService.js` + `mockDb.js` + `mockData.js` + `rules.js`.
-**Done when:** a scratch page lists FH-304B's 4 items in **both** mock mode and Supabase mode, and tests T1–T7 from Section 4.3 fail as expected.
+**Done when:** a scratch page lists FH-304B's 4 items in **both** mock mode and Supabase mode, and tests T1–T7 from Section 4.3 behave as listed (T5's forged timestamp is silently replaced; the other six are rejected).
 
 ### Increment 2 — Auth, 2FA gate, routing, demo switcher
 - `/login`: email + password → `signIn` → **TwoFactorModal** (6 boxes, auto-advance, paste support). Accepts `123456`; show a small "Demo code: 123456" hint. Store `mfaVerified` in `sessionStorage`.
@@ -946,7 +946,7 @@ Insert into `ai_unit_reports`. Return everything to the UI. If this call fails o
 3. **(40 s) A judge scans it with their own phone** (switch to Jordan) → 2FA → photographs the blinds. **Nemotron Capture Coach**: "Lower the blinds fully so all slats are visible" → retake → ✅ → Lock & Submit.
 4. **(15 s) Tamper attempt live:** in the console, as Alex, try to edit a locked move-in note → **Postgres rejects it**. "Not even the admin can do this."
 5. **(30 s) Move-out (Sam, BB-112):** the move-in reference photo guides the angle → lock.
-6. **(30 s) Admin → "Run Nemotron Review"** on FH-304B: desk = pre-existing (cites the Aug 18 10:14 AM photo, **$85 waived**), blinds = new damage (**$45 from the fee schedule**). "Nemotron proposes, code computes, humans decide." Approve.
+6. **(30 s) Admin → "Run Nemotron Review"** on FH-304B: desk = pre-existing (cites the Aug 18 10:14 AM photo, **$85 waived**), blinds = new damage (fine from the fee schedule: the $45 standard charge, halved if Nemotron rates it minor). "Nemotron proposes, code computes, humans decide." Approve.
 7. **(15 s) Dispute:** the sink dispute → Nemotron evidence brief → admin waives → ✓ integrity badges → **Download PDF**.
 8. **(10 s) Close** on the "$ saved by students" KPI.
 
@@ -983,3 +983,16 @@ Insert into `ai_unit_reports`. Return everything to the UI. If this call fails o
 - **Smaller images:** seed photos under 250 KB and at most 1200 px wide; student photos resized to 1280 px at JPEG quality 0.80 before upload (Sections 4.5, 6).
 - **Parallel AI review:** `ai-review` runs the per-item Nemotron calls with `Promise.allSettled` (or 2 batches of 2), each with a 20 s timeout. A slow or failed item becomes `NEEDS_HUMAN_REVIEW` instead of failing the run (Sections 8.1, 8.3).
 - **Postgres 15+ note** on `security_invoker` in `001_schema.sql` (Section 4.1).
+
+## 15. Changes in v2.2 and v2.3
+**v2.2**
+- Increment 1's "Done when" now checks all seven tamper tests (T1–T7), not just T1–T4.
+- Seed-data note: the seed rows leave the `*_sha256` fingerprints empty on purpose; `hash-seed.mjs` fills them in.
+- **Camera-only capture:** `MediaCapture` wraps `src/student/CameraCapture.jsx` (live `getUserMedia` camera + `MediaRecorder`, photos stamped with room/item/time). There is no file picker, so students can't upload from the camera roll (Section 7, Increment 3; Q&A in Section 11).
+
+**v2.3**
+- Removed the unexplained "Native build edition" label: Walkthrough is still a zero-download web app.
+- Video limit aligned to 15 s everywhere, matching `CameraCapture` (Section 6).
+- T1–T7 wording: T5 is silently corrected, not rejected (Sections 4.3, 7).
+- Demo script: the blinds fine depends on severity ($45 standard charge, $22.50 if minor), matching the `ai-review` fee rules (Section 11).
+- Fixed a non-standard hyphen in "Wi-Fi".
