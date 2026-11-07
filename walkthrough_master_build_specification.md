@@ -1,4 +1,4 @@
-# 🛠️ Walkthrough — Master Build Specification (v2)
+# 🛠️ Walkthrough — Master Build Specification (v2.1)
 
 > **HackUTD · Target: NVIDIA challenge — "Use Nemotron beyond a chatbot"**
 > Repo: [`Walkthru-HackUTD`](https://github.com/aashwatSingh/Walkthru-HackUTD) · Stack: React (Vite) + Supabase (Postgres, Auth, Storage, Edge Functions) + NVIDIA Nemotron · Deploy: Vercel
@@ -390,6 +390,9 @@ begin
 end $$;
 
 -- ───────────── Dashboard view (respects RLS of the caller) ─────────────
+-- NOTE: `security_invoker = true` requires PostgreSQL 15+ (standard on all new Supabase projects;
+-- check with `select version();`). Never delete it to make this run on older Postgres: without it
+-- the view runs as its owner, skips RLS, and every student could read every unit's items.
 create view item_dashboard with (security_invoker = true) as
 select i.*,
        u.unit_code, u.building_name, u.room_number, u.semester,
@@ -514,6 +517,8 @@ update profiles set full_name = 'Priya Nair'   where email = 'priya.nair@univers
 
 **Seed images:** put 6 photos in `public/seed/`: `door.jpg`, `desk.jpg` (visible scratch), `desk-water-ring.jpg`, `blinds.jpg`, `blinds-broken.jpg`, `sink.jpg` (hairline crack). **Best option: photograph a real room at the venue or hotel.** Real damage gives Nemotron something real to find. Don't hot-link external image URLs; they can break or be blocked on venue Wi-Fi.
 
+**Compress the seed photos before committing them:** each must be **under 250 KB** and **at most 1200 px wide** (JPEG quality ≈ 80; lower it if a file is still over 250 KB). `ai-review` base64-encodes two photos per item inside an Edge Function, and small files keep it far from memory and payload limits. Use [Squoosh](https://squoosh.app) in the browser, or ImageMagick: `magick mogrify -resize '1200x>' -quality 80 public/seed/*.jpg`. Compress **before** running `hash-seed.mjs` so the fingerprints match the final files. Check sizes with `ls -lh public/seed`.
+
 ```sql
 insert into checklist_template (step_order, zone_category, item_name, instruction_text, standard_charge) values
  (1, 'Entryway',    'Main Door & Deadbolt Lock',      'Capture both sides of the entry door, frame, and deadbolt latch.', 150),
@@ -625,6 +630,18 @@ PUBLIC_SITE_URL=https://walkthru.vercel.app       # so functions can fetch /seed
 
 ⚠️ **Phones must use HTTPS** (the Vercel URL). `crypto.subtle` (hashing) doesn't work over plain `http://192.168.x.x`.
 
+**Deploying the Edge Functions (P1, no Docker needed):**
+- **Easiest: deploy in the browser.** Supabase Dashboard → **Edge Functions → Deploy a new function → Via Editor**. Name it exactly `photo-check` (then repeat for `ai-review`), paste the code from `supabase/functions/<name>/`, and click Deploy. No local Docker or Supabase CLI needed. The repo stays the source of truth, so re-paste after every change.
+  - The editor deploys each function on its own, so `../_shared/` imports won't resolve. Add `nemotron.ts` and `cors.ts` as files inside each function (or paste them at the top of `index.ts`) and import them as `./nemotron.ts` and `./cors.ts`.
+  - Then turn **off** JWT verification in each function's settings (the toggle may read "Verify JWT with legacy secret"). This matches the CLI flag below.
+- **If you deploy with the CLI instead:**
+  ```bash
+  npx supabase login
+  npx supabase functions deploy photo-check --no-verify-jwt --project-ref <project-ref>
+  npx supabase functions deploy ai-review --no-verify-jwt --project-ref <project-ref>
+  ```
+  `--no-verify-jwt` stops the gateway from rejecting a browser request before it reaches the function's own auth check (Section 8.1). That covers the CORS preflight (`OPTIONS`), which carries no `Authorization` header, and tokens from Supabase's newer API keys and JWT signing keys, which the gateway's built-in JWT check may not accept. It's safe only because every function verifies the caller itself.
+
 ---
 
 ## 6. `dbService.js` — The Shared Contract
@@ -653,7 +670,22 @@ Everyone codes against these signatures from hour 1. If `VITE_SUPABASE_URL` is m
 | `getAiReviews(itemIds)`, `getLatestUnitReport(unitId)` | admin (+ student photo checks) | Latest result per item/kind |
 
 **Upload sequence** (`uploadStudentMedia`):
-1. Images: resize to max 1600px, JPEG quality 0.85 (canvas). Videos: reject over **50 MB** or **30 s** with a friendly message.
+1. Images: resize on a canvas to **max 1280 px** (longest side) at **JPEG quality 0.80**, about 150–250 KB per photo. Uploads stay fast on venue Wi-Fi and base64 payloads stay small for Nemotron. Videos: reject over **50 MB** or **30 s** with a friendly message.
+   ```js
+   // src/lib/image.js
+   export async function compressImage(file, maxSide = 1280, quality = 0.8) {
+     const img = new Image();
+     img.src = URL.createObjectURL(file);
+     await img.decode();                       // modern browsers apply the photo's rotation here
+     const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+     const canvas = document.createElement('canvas');
+     canvas.width = Math.round(img.naturalWidth * scale);
+     canvas.height = Math.round(img.naturalHeight * scale);
+     canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+     URL.revokeObjectURL(img.src);
+     return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+   }
+   ```
 2. `sha256 = await sha256Hex(fileOrBlob)`:
    ```js
    export async function sha256Hex(blob) {
@@ -727,18 +759,36 @@ Vite + React + Tailwind + router + `vercel.json`; deploy the empty app to Vercel
 ## 8. Nemotron Inspection Agent (Edge Functions)
 
 ### 8.1 Shared helper — `supabase/functions/_shared/nemotron.ts`
+> Deploying from the Dashboard editor? Copy this file and `cors.ts` into each function (Section 5).
+
 ```ts
 const NIM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
-export async function nemotron(model: string, messages: unknown[], maxTokens = 900) {
-  const res = await fetch(NIM_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${Deno.env.get('NVIDIA_API_KEY')}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: maxTokens }),
-  });
-  if (!res.ok) throw new Error(`Nemotron ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return data.choices[0].message.content as string;
+// Every call gets its own AbortController timeout (default 20 s), so one slow
+// model response can't hang a whole function run.
+export async function nemotron(
+  model: string,
+  messages: unknown[],
+  { maxTokens = 900, timeoutMs = 20_000 }: { maxTokens?: number; timeoutMs?: number } = {},
+) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(NIM_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${Deno.env.get('NVIDIA_API_KEY')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: maxTokens }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`Nemotron ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    return data.choices[0].message.content as string;
+  } catch (err) {
+    if (controller.signal.aborted) throw new Error(`Nemotron timed out after ${timeoutMs / 1000} s`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Models sometimes wrap JSON in ```json fences or add reasoning text. Extract the first {...} block.
@@ -753,8 +803,36 @@ export const imagePart = (b64: string, mime = 'image/jpeg') =>
 ```
 - Load images with the **service-role** client: `storage.from('inspection-media').download(path)`. Load `/seed/...` paths with `fetch(PUBLIC_SITE_URL + path)`. Base64-encode with `encodeBase64` from `jsr:@std/encoding/base64`.
 - If the chosen VL model rejects `image_url` parts or multiple images, check its build.nvidia.com page for the expected format and adjust **only** this helper.
-- Add CORS headers (`_shared/cors.ts`) and handle `OPTIONS`, since the browser calls these functions directly.
-- **Authorize the caller first:** create a client with the caller's `Authorization` header. `photo-check` reads the item with it (RLS proves ownership); `ai-review` calls `rpc('is_admin')`. Write results with the **service-role** client.
+- **CORS:** the browser calls these functions directly. Answer `OPTIONS` first, and send `corsHeaders` on **every** response, errors included. A 401 or 500 without them shows up in the browser as a misleading "CORS error".
+  ```ts
+  // _shared/cors.ts
+  export const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+  export const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  ```
+- **Authorize the caller first.** JWT verification is off at the gateway (Section 5), so this check is the only gate. Return `401` before any Nemotron call if the `Authorization` header is missing or doesn't belong to a signed-in user:
+  ```ts
+  // index.ts (same opening for both functions)
+  import { createClient } from 'jsr:@supabase/supabase-js@2';
+  import { corsHeaders, json } from '../_shared/cors.ts';   // './cors.ts' in the Dashboard editor
+
+  Deno.serve(async (req) => {
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) return json({ error: 'Not signed in' }, 401);
+    const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } });
+    const { data: { user } } = await userClient.auth.getUser(authHeader.replace('Bearer ', ''));
+    if (!user) return json({ error: 'Not signed in' }, 401);
+    // ...function-specific work, wrapped in try/catch → return json({ error: String(err) }, 500)
+    return json({ ok: true });
+  });
+  ```
+  Then `photo-check` reads the item with `userClient` (RLS proves ownership) and `ai-review` calls `userClient.rpc('is_admin')`. Write results with the **service-role** client.
 - **Videos:** skip AI ("AI review available for photos") and keep the human flow.
 
 ### 8.2 `photo-check` — Capture Coach
@@ -773,7 +851,7 @@ Insert into `ai_reviews` (`kind = PHOTO_CHECK_BEFORE|AFTER`), then return the re
 ### 8.3 `ai-review` — Damage Diff → Fees → Memo (the agent pipeline)
 Input `{ unitId }`; the unit must be `COMPLETED`; admin only. Steps:
 
-**Step A: Damage Diff (VL, one call per item with two images, run sequentially)**
+**Step A: Damage Diff (VL, one call per item with two images, run in parallel)**
 ```
 System: You are a careful housing damage inspector. Compare only the named item. Ignore differences in lighting,
         camera angle, clutter, and image quality. Reply with JSON only.
@@ -787,6 +865,25 @@ User:   [image 1: MOVE-IN, captured {before_captured_at}] [image 2: MOVE-OUT, ca
          "confidence": number between 0 and 1,
          "rationale": "max 2 sentences; cite the move-in photo/note and timestamp when relevant"}
 ```
+Run the per-item calls **in parallel** with `Promise.allSettled`, not one after another. Each call has its own 20-second `AbortController` timeout (built into `nemotron()`, Section 8.1), so one slow response can't push the function past its wall-clock limit or crash the whole unit review:
+```ts
+const pairs = items.filter((i) => i.before_media_type === 'image' && i.after_media_type === 'image');
+// diffItem(item): load both images → nemotron(VLM, prompt above) → parseJson
+const settled = await Promise.allSettled(pairs.map(diffItem));
+const diffs = settled.map((r, n) => r.status === 'fulfilled'
+  ? { item_id: pairs[n].id, ...r.value }
+  : { item_id: pairs[n].id, suggested_status: 'NEEDS_HUMAN_REVIEW', error: String(r.reason) });
+```
+- If NVIDIA's API answers `429` (rate limit), run **2 batches of 2** instead:
+  ```ts
+  const settled: PromiseSettledResult<Record<string, unknown>>[] = [];
+  for (let n = 0; n < pairs.length; n += 2) {
+    settled.push(...(await Promise.allSettled(pairs.slice(n, n + 2).map(diffItem))));
+  }
+  ```
+- A failed or timed-out item never fails the run. It's saved as `NEEDS_HUMAN_REVIEW` with its error (UI: "AI couldn't review this item — review it manually"), and Steps B and C continue with the rest.
+- Worst case is about 20 s for Step A (40 s in batches) plus 20 s for Step C, well inside the Edge Function wall-clock limit.
+
 **Step B: Fees (plain code, no AI):** `NEW_DAMAGE_BILLABLE` → `suggested_fine = standard_charge × {minor: 0.5, moderate: 1, severe: 1.5}` (worst finding); anything else → 0. `waived_if_pre_existing = standard_charge`. If `confidence < 0.6`, force `NEEDS_HUMAN_REVIEW`. Store `{...diff, suggested_fine}` in `ai_reviews` (`kind = DAMAGE_DIFF`).
 
 **Step C: Memo + Dispute Briefs (text model, one call)**: send the unit, the items (status, notes, timestamps, dispute reasons) and the Step A/B results as JSON:
@@ -798,7 +895,7 @@ User:   {unit + items + ai results JSON}
          "student_note": "plain-language explanation of each charge or waiver, 4 sentences max",
          "dispute_briefs": [{"item_id": str, "brief": "what the move-in and move-out evidence shows, with timestamps; end with a recommendation and say it is a recommendation"}]}
 ```
-Insert into `ai_unit_reports`. Return everything to the UI.
+Insert into `ai_unit_reports`. Return everything to the UI. If this call fails or times out, skip the memo (UI: "Summary unavailable") and still return the Step A and B results.
 
 **Never** let the function write `condition_status` or `estimated_fine`. The admin clicks "Apply suggestion" (which calls `updateAdminAssessment`).
 
@@ -875,3 +972,11 @@ Insert into `ai_unit_reports`. Return everything to the UI.
 - Added the student **dispute** flow, **SHA-256** integrity badges, **PDF report**, **audit log**, and the **Nemotron inspection agent**.
 - Single phase source of truth (`inspection_phase`); dropped the per-item `*_locked` flags.
 - Seed images are self-hosted; QR codes use `VITE_PUBLIC_SITE_URL`; Vercel SPA rewrite added.
+
+---
+
+## 14. Changes in v2.1 (reliability & deployment)
+- **Edge Function deploys:** P1 can deploy `photo-check` and `ai-review` from the Supabase Dashboard editor (no Docker or CLI). CLI deploys use `--no-verify-jwt`; each function checks the caller itself and sends CORS headers on every response (Sections 5, 8.1).
+- **Smaller images:** seed photos under 250 KB and at most 1200 px wide; student photos resized to 1280 px at JPEG quality 0.80 before upload (Sections 4.5, 6).
+- **Parallel AI review:** `ai-review` runs the per-item Nemotron calls with `Promise.allSettled` (or 2 batches of 2), each with a 20 s timeout. A slow or failed item becomes `NEEDS_HUMAN_REVIEW` instead of failing the run (Sections 8.1, 8.3).
+- **Postgres 15+ note** on `security_invoker` in `001_schema.sql` (Section 4.1).
