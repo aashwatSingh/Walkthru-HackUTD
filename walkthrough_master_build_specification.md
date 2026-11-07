@@ -1,4 +1,4 @@
-# 🛠️ Walkthrough — Master Build Specification (v2.3)
+# 🛠️ Walkthrough — Master Build Specification (v2.4)
 
 > **HackUTD · Target: NVIDIA challenge — "Use Nemotron beyond a chatbot"**
 > Repo: [`Walkthru-HackUTD`](https://github.com/aashwatSingh/Walkthru-HackUTD) · Stack: React (Vite) + Supabase (Postgres, Auth, Storage, Edge Functions) + NVIDIA Nemotron · Deploy: Vercel
@@ -30,8 +30,8 @@ Nemotron is **embedded in the workflow at three points**. The user never chats w
 | # | Agent step | Who triggers it | Nemotron model | Output |
 |---|---|---|---|---|
 | 1 | **Capture Coach** | Every student photo upload | Vision-language (VL) | "Does this photo show the right item, framed correctly, sharp, same angle as move-in?" + a one-line retake tip |
-| 2 | **Damage Diff** | Admin clicks "Run Nemotron Review" on a unit | VL | Per item: change detected?, findings, suggested status, confidence, rationale citing move-in evidence |
-| 3 | **Review Memo + Dispute Brief** | Same run, after step 2 | Text (reasoning) | Admin summary, plain-language note to the student, evidence brief for every disputed item |
+| 2 | **Inspection Agent** | Admin clicks "Run Nemotron Review" on a unit | Text model plans and calls tools; the VL model runs as the `compare_photos` tool | A multi-step, tool-calling review: per-item findings, suggested status, confidence, rationale citing move-in evidence, fee from the fee schedule |
+| 3 | **Review Memo + Dispute Brief** | The agent's final `submit_review` step | Text (reasoning) | Admin summary, plain-language note to the student, evidence brief for every disputed item |
 
 **Design principle to say out loud to judges:** *Nemotron proposes, code computes, humans decide.* The model classifies; a deterministic fee schedule sets dollar amounts; an admin must approve every status.
 
@@ -635,7 +635,7 @@ PUBLIC_SITE_URL=https://walkthru.vercel.app       # so functions can fetch /seed
 
 **Deploying the Edge Functions (P1, no Docker needed):**
 - **Easiest: deploy in the browser.** Supabase Dashboard → **Edge Functions → Deploy a new function → Via Editor**. Name it exactly `photo-check` (then repeat for `ai-review`), paste the code from `supabase/functions/<name>/`, and click Deploy. No local Docker or Supabase CLI needed. The repo stays the source of truth, so re-paste after every change.
-  - The editor deploys each function on its own, so `../_shared/` imports won't resolve. Add `nemotron.ts` and `cors.ts` as files inside each function (or paste them at the top of `index.ts`) and import them as `./nemotron.ts` and `./cors.ts`.
+  - The editor deploys each function on its own, so `../_shared/` imports won't resolve. Add the `_shared/` files (`cors.ts`, `nemotron.ts`, `prompts.js`, `supabase.ts`, and for `ai-review` also `agent.ts`) as files inside each function and change `'../_shared/` to `'./` in the imports.
   - Then turn **off** JWT verification in each function's settings (the toggle may read "Verify JWT with legacy secret"). This matches the CLI flag below.
 - **If you deploy with the CLI instead:**
   ```bash
@@ -643,7 +643,7 @@ PUBLIC_SITE_URL=https://walkthru.vercel.app       # so functions can fetch /seed
   npx supabase functions deploy photo-check --no-verify-jwt --project-ref <project-ref>
   npx supabase functions deploy ai-review --no-verify-jwt --project-ref <project-ref>
   ```
-  `--no-verify-jwt` stops the gateway from rejecting a browser request before it reaches the function's own auth check (Section 8.1). That covers the CORS preflight (`OPTIONS`), which carries no `Authorization` header, and tokens from Supabase's newer API keys and JWT signing keys, which the gateway's built-in JWT check may not accept. It's safe only because every function verifies the caller itself.
+  `--no-verify-jwt` stops the gateway from rejecting a browser request before it reaches the function's own auth check (`requireUser` in `supabase/functions/_shared/supabase.ts`). That covers the CORS preflight (`OPTIONS`), which carries no `Authorization` header, and tokens from Supabase's newer API keys and JWT signing keys, which the gateway's built-in JWT check may not accept. It's safe only because every function verifies the caller itself.
 
 ---
 
@@ -738,7 +738,7 @@ Vite + React + Tailwind + router + `vercel.json`; deploy the empty app to Vercel
 - **Charts (Recharts):** Bar: waived $ vs billable $ per building. Donut: item status breakdown.
 - **Table:** filters (building, unit, zone, status) · columns: student, unit, item, before time, after time, status badge, fine, **AI suggestion badge**, **Inspect side-by-side**.
 - **Unit actions:** "Open move-out" (MOVE_IN_LOCKED units) · "Run Nemotron Review" (COMPLETED units) · "View report".
-- **ComparatorModal:** left = move-in media + timestamp + notes; right = move-out. Toggle between **side-by-side** and **slider** (draggable divider, images only). **IntegrityBadge** on each side. **AiReviewPanel** (findings, suggested status, confidence, rationale, "Apply suggestion"). Resolution buttons:
+- **ComparatorModal:** left = move-in media + timestamp + notes; right = move-out. Toggle between **side-by-side** and **slider** (draggable divider, images only). **IntegrityBadge** on each side. **AiReviewPanel** for this item (findings, suggested status, confidence, rationale, fee, "Apply suggestion"; full spec in Section 8.4). Resolution buttons:
   - **Waive (pre-existing proof)** → `PRE_EXISTING_DAMAGE`, fine 0
   - **Approve billable fine** → `NEW_DAMAGE_BILLABLE`, fine prefilled from the fee schedule (editable)
   - **Mark no change** → `NO_CHANGE`, fine 0
@@ -761,153 +761,130 @@ Vite + React + Tailwind + router + `vercel.json`; deploy the empty app to Vercel
 
 ## 8. Nemotron Inspection Agent (Edge Functions)
 
-### 8.1 Shared helper — `supabase/functions/_shared/nemotron.ts`
-> Deploying from the Dashboard editor? Copy this file and `cors.ts` into each function (Section 5).
+> **Source of truth: the code in [`supabase/functions/`](supabase/functions/)** (deploy steps and the API in its `README.md`). The excerpts below are copied from those files; if they ever differ, the files win.
 
+### 8.0 How this meets the NVIDIA challenge criteria
+| Criterion | What judges can see | Where |
+|---|---|---|
+| **Beyond a chatbot** | Nobody chats with Nemotron. It works inside the inspection flow: coaching photos as they're taken and reviewing every move-out. | 8.2, 8.3 |
+| **Multi-step workflow** | `ai-review` is an agent loop: the Nemotron text model **plans** the review across several rounds (list → compare → fee → dispute evidence → submit). The panel shows each step as a timeline. | 8.3, 8.4 |
+| **Tool integration** | The agent calls **5 tools** through Nemotron's OpenAI-compatible `tools` API: a database tool, the **Nemotron vision model as a tool**, a fee-schedule tool, a dispute-evidence tool, and a final submit tool. | 8.3 |
+| **Two Nemotron models working together** | Text model = planner; vision model = photo inspector (called only through `compare_photos`). | 8.3 |
+
+**Design principle to say out loud:** *Nemotron proposes, code computes, humans decide.* The model classifies and plans; the fee schedule (code) sets every dollar amount; an admin approves every status.
+
+### 8.1 NVIDIA client and parsing — `_shared/nemotron.ts`, `_shared/prompts.js`
+**Low-latency, deterministic settings** for every call (vision, text, and tool selection):
 ```ts
-const NIM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
-
-// Every call gets its own AbortController timeout (default 20 s), so one slow
-// model response can't hang a whole function run.
-export async function nemotron(
-  model: string,
-  messages: unknown[],
-  { maxTokens = 900, timeoutMs = 20_000 }: { maxTokens?: number; timeoutMs?: number } = {},
-) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+// _shared/nemotron.ts
+export const SAMPLING = { temperature: 0.1, top_p: 0.9 } as const;
+// chat(model, messages, { maxTokens = 1500, timeoutMs = 20_000, tools }) → { content, tool_calls }
+//   body: { model, messages, ...SAMPLING, max_tokens, stream: false, tools?, tool_choice: 'auto' }
+//   every call has its own AbortController timeout (20 s) → "Nemotron timed out after 20 s"
+//   HTTP errors throw NemotronHttpError(status) so ai-review can tell "no tool support" (4xx) from outages
+```
+**Zero JSON-parse crashes:** Nemotron reasoning models can emit `<think>…</think>` blocks that contain braces, and models sometimes add code fences or chatter. Everything goes through one parser that strips those first and **always fails with a clean, catchable error**:
+```js
+// _shared/prompts.js
+export function parseModelJson(answer) {
+  const cleaned = String(answer ?? '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<think>[\s\S]*$/i, '') // reasoning cut off mid-thought: no JSON follows it
+    .replace(/```(?:json)?/gi, '')
+    .trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('Model did not return JSON');
   try {
-    const res = await fetch(NIM_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${Deno.env.get('NVIDIA_API_KEY')}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: maxTokens }),
-      signal: controller.signal,
-    });
-    if (!res.ok) throw new Error(`Nemotron ${res.status}: ${await res.text()}`);
-    const data = await res.json();
-    return data.choices[0].message.content as string;
-  } catch (err) {
-    if (controller.signal.aborted) throw new Error(`Nemotron timed out after ${timeoutMs / 1000} s`);
-    throw err;
-  } finally {
-    clearTimeout(timer);
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    throw new Error('Model returned malformed JSON');
   }
 }
-
-// Models sometimes wrap JSON in ```json fences or add reasoning text. Extract the first {...} block.
-export function parseJson<T>(text: string): T {
-  const start = text.indexOf('{'), end = text.lastIndexOf('}');
-  if (start < 0 || end < 0) throw new Error('Model did not return JSON');
-  return JSON.parse(text.slice(start, end + 1));
-}
-
-export const imagePart = (b64: string, mime = 'image/jpeg') =>
-  ({ type: 'image_url', image_url: { url: `data:${mime};base64,${b64}` } });
 ```
-- Load images with the **service-role** client: `storage.from('inspection-media').download(path)`. Load `/seed/...` paths with `fetch(PUBLIC_SITE_URL + path)`. Base64-encode with `encodeBase64` from `jsr:@std/encoding/base64`.
-- If the chosen VL model rejects `image_url` parts or multiple images, check its build.nvidia.com page for the expected format and adjust **only** this helper.
-- **CORS:** the browser calls these functions directly. Answer `OPTIONS` first, and send `corsHeaders` on **every** response, errors included. A 401 or 500 without them shows up in the browser as a misleading "CORS error".
-  ```ts
-  // _shared/cors.ts
-  export const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  };
-  export const json = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-  ```
-- **Authorize the caller first.** JWT verification is off at the gateway (Section 5), so this check is the only gate. Return `401` before any Nemotron call if the `Authorization` header is missing or doesn't belong to a signed-in user:
-  ```ts
-  // index.ts (same opening for both functions)
-  import { createClient } from 'jsr:@supabase/supabase-js@2';
-  import { corsHeaders, json } from '../_shared/cors.ts';   // './cors.ts' in the Dashboard editor
+Every parsed answer is then **normalized** (`normalizePhotoCheck`, `normalizeDiff`, `normalizeMemo`): unknown statuses become `NEEDS_HUMAN_REVIEW`, confidence is clamped to 0–1, briefs for non-disputed items are dropped. A bad answer can make one item "review manually"; it can never crash the run.
 
-  Deno.serve(async (req) => {
-    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) return json({ error: 'Not signed in' }, 401);
-    const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } });
-    const { data: { user } } = await userClient.auth.getUser(authHeader.replace('Bearer ', ''));
-    if (!user) return json({ error: 'Not signed in' }, 401);
-    // ...function-specific work, wrapped in try/catch → return json({ error: String(err) }, 500)
-    return json({ ok: true });
-  });
-  ```
-  Then `photo-check` reads the item with `userClient` (RLS proves ownership) and `ai-review` calls `userClient.rpc('is_admin')`. Write results with the **service-role** client.
-- **Videos:** skip AI ("AI review available for photos") and keep the human flow.
+**Minimal token overhead**
+- Photos are ~150–250 KB (Sections 4.5, 6) and go **only to the vision model**. The planning model never receives an image; it sees compact JSON tool results (capped at 3,000 characters each).
+- `max_tokens`: 1,000 per agent round, 1,200 for photo checks, 1,500 for comparisons.
+- Prompts ask for one exact JSON shape, with no examples to pay for on every call.
+- Comparisons are cached per item: `calculate_fee` and the coverage check reuse them instead of calling Nemotron again.
 
-### 8.2 `photo-check` — Capture Coach
-Input `{ itemId, phase }`. Images: the new photo, plus (move-out only) the move-in photo as reference.
+### 8.2 `photo-check` — Capture Coach (vision model)
+`POST { itemId, phase: 'before' | 'after' }`, called right after each upload, **not awaited**. RLS proves the caller owns the item. The vision model gets the new photo, plus the move-in photo at move-out, and returns `{ ok, shows_item, framing_ok, lighting_ok, sharp, matches_reference_angle, retake_tip }`. The result is saved to `ai_reviews`. Advisory only: it never blocks the student. Videos return `{ skipped: true }`. Prompt: `photoCheckMessages()` in `_shared/prompts.js`.
+
+### 8.3 `ai-review` — the tool-calling inspection agent
+`POST { unitId }`, admin only, unit must be `COMPLETED`.
+
+**The workflow (typical run: 4 rounds, ~8–10 tool calls):**
 ```
-System: You check photos for a university housing inspection. Reply with JSON only.
-User:   [image 1: new photo] [image 2: move-in reference, move-out only]
-        Checklist item: "{item_name}". Framing instruction: "{instruction_text}".
-        {move-out: "Image 2 is the move-in photo of the same item; judge whether image 1 uses a similar angle."}
-        Return exactly:
-        {"shows_item": bool, "framing_ok": bool, "lighting_ok": bool, "sharp": bool,
-         "matches_reference_angle": bool | null, "retake_tip": "one short sentence, empty if the photo is fine"}
+Round 1  planner → list_items                                     (what's in this room?)
+Round 2  planner → compare_photos × N  +  get_dispute_evidence    (all in parallel; vision model runs here)
+Round 3  planner → calculate_fee for billable / pre-existing items
+Round 4  planner → submit_review { admin_summary, student_note, dispute_briefs }
 ```
-Insert into `ai_reviews` (`kind = PHOTO_CHECK_BEFORE|AFTER`), then return the result.
+**The tools** (OpenAI-format definitions in `ai-review/index.ts`):
+| Tool | Runs | Returns (compact JSON) |
+|---|---|---|
+| `list_items` | DB read | item ids, names, zones, `has_photos`, status, notes |
+| `compare_photos(item_id)` | **Nemotron vision model** (`damageDiffMessages`) | findings, `suggested_status`, confidence, rationale |
+| `calculate_fee(item_id)` | Fee schedule in code (`applyFees`) | `suggested_fine` or `waived_if_pre_existing`, plus the rule used |
+| `get_dispute_evidence(item_id)` | DB read | student's reason, current fine, both notes and timestamps |
+| `submit_review(...)` | Ends the run | memo and dispute briefs (normalized) |
 
-### 8.3 `ai-review` — Damage Diff → Fees → Memo (the agent pipeline)
-Input `{ unitId }`; the unit must be `COMPLETED`; admin only. Steps:
+**The loop** (`_shared/agent.ts`, `runAgent`): each round is one planner call; every tool call the model asks for in that round runs **in parallel**; results go back as `role: 'tool'` messages. Bad tool calls (unknown tool, malformed arguments, video item) come back to the model as `{ error }` and are recorded in the trace, so the model can recover without the run crashing. Budget: at most 6 rounds and 100 s in total, and no new round starts unless it can finish in time.
 
-**Step A: Damage Diff (VL, one call per item with two images, run in parallel)**
+**Guarantees, whatever the model does:**
+1. **Coverage:** after the loop, code compares every photo pair the agent skipped. These steps appear in the trace as `round: 0`, "run by code".
+2. **Money is code:** `suggested_fine = standard_charge × {minor 0.5, moderate 1, severe 1.5}` for the worst *new* finding. Confidence under 0.6 → `NEEDS_HUMAN_REVIEW`, $0.
+3. **Automatic fallback:** if the text model doesn't support tool calling (4xx), times out, or never calls `submit_review`, the run finishes as `mode: 'pipeline'` (compare everything, then one memo call) with `fallback_reason` set. `AI_REVIEW_MODE=pipeline` forces this.
+4. **Bounded vision load:** at most `AI_REVIEW_CONCURRENCY` (default 4) vision calls at once; set it to 2 if NVIDIA returns 429s.
+5. **Never writes** `condition_status` or `estimated_fine`. The admin applies suggestions.
+
+**Response** (also saved: per-item rows in `ai_reviews`, memo + trace in `ai_unit_reports`):
+```js
+{ unit_id, unit_code, mode: 'agent' | 'pipeline', models: { vision, text }, elapsed_ms,
+  items: [{ item_id, item_name, suggested_status, suggested_fine, waived_if_pre_existing,
+            confidence, findings, rationale, error?, skipped? }],
+  memo: { admin_summary, student_note, dispute_briefs } | null, memo_error?,
+  agent: { rounds, tool_calls, fallback_reason?, trace: [{ round, tool, args, ok, ms, summary }] } }
 ```
-System: You are a careful housing damage inspector. Compare only the named item. Ignore differences in lighting,
-        camera angle, clutter, and image quality. Reply with JSON only.
-User:   [image 1: MOVE-IN, captured {before_captured_at}] [image 2: MOVE-OUT, captured {after_captured_at}]
-        Item: "{item_name}". Student move-in note: "{before_notes}". Student move-out note: "{after_notes}".
-        Return exactly:
-        {"change_detected": bool,
-         "findings": [{"description": str, "location": str, "present_at_move_in": bool,
-                       "severity": "minor" | "moderate" | "severe"}],
-         "suggested_status": "NO_CHANGE" | "PRE_EXISTING_DAMAGE" | "NEW_DAMAGE_BILLABLE" | "NEEDS_HUMAN_REVIEW",
-         "confidence": number between 0 and 1,
-         "rationale": "max 2 sentences; cite the move-in photo/note and timestamp when relevant"}
-```
-Run the per-item calls **in parallel** with `Promise.allSettled`, not one after another. Each call has its own 20-second `AbortController` timeout (built into `nemotron()`, Section 8.1), so one slow response can't push the function past its wall-clock limit or crash the whole unit review:
-```ts
-const pairs = items.filter((i) => i.before_media_type === 'image' && i.after_media_type === 'image');
-// diffItem(item): load both images → nemotron(VLM, prompt above) → parseJson
-const settled = await Promise.allSettled(pairs.map(diffItem));
-const diffs = settled.map((r, n) => r.status === 'fulfilled'
-  ? { item_id: pairs[n].id, ...r.value }
-  : { item_id: pairs[n].id, suggested_status: 'NEEDS_HUMAN_REVIEW', error: String(r.reason) });
-```
-- If NVIDIA's API answers `429` (rate limit), run **2 batches of 2** instead:
-  ```ts
-  const settled: PromiseSettledResult<Record<string, unknown>>[] = [];
-  for (let n = 0; n < pairs.length; n += 2) {
-    settled.push(...(await Promise.allSettled(pairs.slice(n, n + 2).map(diffItem))));
-  }
-  ```
-- A failed or timed-out item never fails the run. It's saved as `NEEDS_HUMAN_REVIEW` with its error (UI: "AI couldn't review this item — review it manually"), and Steps B and C continue with the rest.
-- Worst case is about 20 s for Step A (40 s in batches) plus 20 s for Step C, well inside the Edge Function wall-clock limit.
+**Before writing UI code**, run `node scripts/test-nemotron.mjs tools` with your chosen text model. ✅ means agent mode; ⚠️ means it will run as pipeline (pick another Nemotron text model if you want agent mode for the demo).
 
-**Step B: Fees (plain code, no AI):** `NEW_DAMAGE_BILLABLE` → `suggested_fine = standard_charge × {minor: 0.5, moderate: 1, severe: 1.5}` (worst finding); anything else → 0. `waived_if_pre_existing = standard_charge`. If `confidence < 0.6`, force `NEEDS_HUMAN_REVIEW`. Store `{...diff, suggested_fine}` in `ai_reviews` (`kind = DAMAGE_DIFF`).
+### 8.4 `AiReviewPanel` (admin UI)
+Shown in two places: a **unit-level drawer** opened by "Run Nemotron Review" (COMPLETED units), and a **per-item section** inside `ComparatorModal`. Data: the `runAiReview(unitId)` response, or the latest saved run via `getLatestUnitReport(unitId)` + `getAiReviews(itemIds)`, so saved results show instantly.
 
-**Step C: Memo + Dispute Briefs (text model, one call)**: send the unit, the items (status, notes, timestamps, dispute reasons) and the Step A/B results as JSON:
-```
-System: You write concise, neutral housing inspection summaries. Never invent evidence. Reply with JSON only.
-User:   {unit + items + ai results JSON}
-        Return exactly:
-        {"admin_summary": ["3 bullets max"],
-         "student_note": "plain-language explanation of each charge or waiver, 4 sentences max",
-         "dispute_briefs": [{"item_id": str, "brief": "what the move-in and move-out evidence shows, with timestamps; end with a recommendation and say it is a recommendation"}]}
-```
-Insert into `ai_unit_reports`. Return everything to the UI. If this call fails or times out, skip the memo (UI: "Summary unavailable") and still return the Step A and B results.
+**States**
+- **Idle:** "Run Nemotron Review" button, plus "Last run: 10:42 AM · agent · 18.2 s" if a saved report exists.
+- **Running:** button disabled; elapsed-seconds counter; the five planned steps (list → compare → fee → evidence → submit) as a greyed checklist; "Usually 10–40 s". The function returns once at the end (no streaming), so don't fake per-step progress.
+- **Done:** the sections below.
+- **Error:** the `{ error }` message, a Retry button, and "Manual review still works". Never blocks resolving items by hand.
 
-**Never** let the function write `condition_status` or `estimated_fine`. The admin clicks "Apply suggestion" (which calls `updateAdminAssessment`).
+**Header:** mode badge. **Agent** (green): "Nemotron agent · 4 rounds · 10 tool calls · 18.2 s". **Pipeline** (grey): "Pipeline mode", with `fallback_reason` in a tooltip. Show both model IDs in small text.
 
-**Upgrade if ahead of schedule:** turn Step A–C into a Nemotron **tool-calling** loop (tools: `list_items`, `compare_item`, `get_fee`, `record_finding`, `write_memo`) so the model decides which items need a closer look. Keep the fixed pipeline as the fallback.
+**Agent timeline** (the visible proof of "multi-step" + "tool integration"): one row per `trace` step, grouped by round ("Round 2 · 5 tools in parallel").
+- Each row: tool icon, tool name, item name, `summary`, duration, ✓ or ✗.
+- `round: 0` rows sit under "Checked by code (coverage)".
+- Failed steps are red with the error. A collapsible "Show tool arguments" reveals `args`.
 
-### 8.4 Reliability rules
-- Run `ai-review` on FH-304B and BB-118 **before judging**. Results persist in the DB, so the demo never waits on a cold API call.
-- Mock mode returns canned results from `mockData.js` after an 800 ms delay.
-- Any Nemotron error → UI shows "AI review unavailable — manual review still works". Never block the human flow.
+**Per-item suggestion cards** (unit drawer: one per item; ComparatorModal: that item's card only):
+- **Status badge:** `suggested_status`.
+- **Confidence bar:** 0–100%. Under 60%, grey with "Needs human review".
+- **Findings list:** description, location, severity chip, and a "new" or "at move-in" tag.
+- **Rationale:** quoted, labelled "Nemotron".
+- **Money:** "Suggested fine $22.50 (fee schedule: $45 × 0.5, minor)" or "$85 waived (pre-existing)".
+- **"Apply suggestion"** calls `updateAdminAssessment(itemId, { status, fine, comments })` with the suggested status and fine, and a comment prefilled from the rationale. It's disabled for `NEEDS_HUMAN_REVIEW`, and while a dispute is open the existing rule applies (a resolution comment is required).
+- **`error` / `skipped` items:** "Review manually" with the reason (e.g. "Nemotron timed out after 20 s", "AI review is available for photos only").
+
+**Memo:** admin summary bullets at the top. Each dispute brief is attached to its item's card, labelled "AI recommendation". The student note has a **Copy** button for the email to the student. If `memo` is null: "Summary unavailable", and the item cards still work.
+
+**Rules:** nothing is applied automatically; every change goes through an admin click. Mock mode returns a canned response *including a trace* after 800 ms, so P3 can build the timeline before the functions are deployed.
+
+### 8.5 Reliability rules
+- Run `ai-review` on FH-304B and BB-118 **before judging**. Results persist, so the demo never waits on a cold API call; rerun live once to show the timeline.
+- Every Nemotron call has a 20 s timeout. A failed, timed-out, or video item becomes `NEEDS_HUMAN_REVIEW` and the rest of the run continues.
+- Any `ai-review` error → the panel shows "AI review unavailable — manual review still works". Never block the human flow.
+- Tested end to end against mocks of Supabase and the NVIDIA API: agent mode, agent skipping items, a model without tool support, and pipeline mode. Not yet run against the real NVIDIA API. Hour 0: `models`, `tools`, `diff` in `scripts/test-nemotron.mjs`.
 
 ---
 
@@ -946,7 +923,7 @@ Insert into `ai_unit_reports`. Return everything to the UI. If this call fails o
 3. **(40 s) A judge scans it with their own phone** (switch to Jordan) → 2FA → photographs the blinds. **Nemotron Capture Coach**: "Lower the blinds fully so all slats are visible" → retake → ✅ → Lock & Submit.
 4. **(15 s) Tamper attempt live:** in the console, as Alex, try to edit a locked move-in note → **Postgres rejects it**. "Not even the admin can do this."
 5. **(30 s) Move-out (Sam, BB-112):** the move-in reference photo guides the angle → lock.
-6. **(30 s) Admin → "Run Nemotron Review"** on FH-304B: desk = pre-existing (cites the Aug 18 10:14 AM photo, **$85 waived**), blinds = new damage (fine from the fee schedule: the $45 standard charge, halved if Nemotron rates it minor). "Nemotron proposes, code computes, humans decide." Approve.
+6. **(30 s) Admin → "Run Nemotron Review"** on FH-304B. Point at the **agent timeline**: Nemotron planned the review and called the vision model, fee schedule and dispute tools across 4 rounds. Desk = pre-existing (cites the Aug 18 10:14 AM photo, **$85 waived**), blinds = new damage (fine from the fee schedule: the $45 standard charge, halved if Nemotron rates it minor). "Nemotron proposes, code computes, humans decide." Approve.
 7. **(15 s) Dispute:** the sink dispute → Nemotron evidence brief → admin waives → ✓ integrity badges → **Download PDF**.
 8. **(10 s) Close** on the "$ saved by students" KPI.
 
@@ -996,3 +973,10 @@ Insert into `ai_unit_reports`. Return everything to the UI. If this call fails o
 - T1–T7 wording: T5 is silently corrected, not rejected (Sections 4.3, 7).
 - Demo script: the blinds fine depends on severity ($45 standard charge, $22.50 if minor), matching the `ai-review` fee rules (Section 11).
 - Fixed a non-standard hyphen in "Wi-Fi".
+
+## 16. Changes in v2.4 (Nemotron agent)
+- **`ai-review` is now a tool-calling agent** (challenge criteria "multi-step workflows" + "tool integration"): the Nemotron text model plans the review over several rounds and calls 5 tools, with the vision model running as `compare_photos`. It falls back to the fixed pipeline automatically (Section 8.3).
+- **NIM efficiency:** `temperature: 0.1`, `top_p: 0.9`; images go only to the vision model; compact tool results; per-item comparison cache (Section 8.1).
+- **Parser:** strips `<think>` blocks (including unclosed ones), fences and chatter, and always fails with a clean error (Section 8.1).
+- **New `AiReviewPanel` spec** with the agent timeline (Section 8.4). Section 8 now points to the real code in `supabase/functions/` instead of draft snippets.
+- `scripts/test-nemotron.mjs tools` checks whether a text model supports tool calling.

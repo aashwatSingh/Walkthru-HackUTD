@@ -3,6 +3,9 @@
 
 const NIM_URL = Deno.env.get('NIM_BASE_URL') ?? 'https://integrate.api.nvidia.com/v1/chat/completions';
 
+// Low temperature + top_p for deterministic JSON and tool selection.
+export const SAMPLING = { temperature: 0.1, top_p: 0.9 } as const;
+
 export const VLM_MODEL = () => requireEnv('NEMOTRON_VLM_MODEL');
 export const TEXT_MODEL = () => requireEnv('NEMOTRON_TEXT_MODEL');
 
@@ -16,22 +19,39 @@ export type ContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } };
 
-export type Message = { role: 'system' | 'user' | 'assistant'; content: string | ContentPart[] };
+export type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
+
+export type ChatMessage = {
+  role: string;
+  content: unknown;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+};
+
+export type ToolDef = {
+  type: 'function';
+  function: { name: string; description: string; parameters: Record<string, unknown> };
+};
 
 export const imagePart = (base64: string, mime = 'image/jpeg'): ContentPart => ({
   type: 'image_url',
   image_url: { url: `data:${mime};base64,${base64}` },
 });
 
-export const textPart = (text: string): ContentPart => ({ type: 'text', text });
+/** Raised for HTTP errors so callers can tell "model doesn't support tools" (4xx) from outages. */
+export class NemotronHttpError extends Error {
+  constructor(public status: number, body: string) {
+    super(`Nemotron ${status}: ${body.slice(0, 500)}`);
+  }
+}
 
-// Every call gets its own AbortController timeout (default 20 s), so one slow
-// model response can't hang a whole function run.
-export async function nemotron(
+// One chat completion. Every call gets its own AbortController timeout (default 20 s),
+// so one slow model response can't hang a whole function run.
+export async function chat(
   model: string,
-  messages: ReadonlyArray<{ role: string; content: unknown }>,
-  { maxTokens = 1500, timeoutMs = 20_000 }: { maxTokens?: number; timeoutMs?: number } = {},
-): Promise<string> {
+  messages: ReadonlyArray<ChatMessage>,
+  { maxTokens = 1500, timeoutMs = 20_000, tools }: { maxTokens?: number; timeoutMs?: number; tools?: ToolDef[] } = {},
+): Promise<{ content: string; tool_calls: ToolCall[] }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -42,18 +62,37 @@ export async function nemotron(
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: maxTokens, stream: false }),
+      body: JSON.stringify({
+        model,
+        messages,
+        ...SAMPLING,
+        max_tokens: maxTokens,
+        stream: false,
+        ...(tools ? { tools, tool_choice: 'auto' } : {}),
+      }),
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error(`Nemotron ${res.status}: ${(await res.text()).slice(0, 500)}`);
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) throw new Error('Nemotron returned an empty answer');
-    return content;
+    if (!res.ok) throw new NemotronHttpError(res.status, await res.text());
+    const message = (await res.json())?.choices?.[0]?.message ?? {};
+    return {
+      content: typeof message.content === 'string' ? message.content : '',
+      tool_calls: Array.isArray(message.tool_calls) ? message.tool_calls : [],
+    };
   } catch (err) {
     if (controller.signal.aborted) throw new Error(`Nemotron timed out after ${timeoutMs / 1000} s`);
     throw err;
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Plain completion that must return text (vision checks, fallback memo).
+export async function nemotron(
+  model: string,
+  messages: ReadonlyArray<ChatMessage>,
+  options: { maxTokens?: number; timeoutMs?: number } = {},
+): Promise<string> {
+  const { content } = await chat(model, messages, options);
+  if (!content.trim()) throw new Error('Nemotron returned an empty answer');
+  return content;
 }

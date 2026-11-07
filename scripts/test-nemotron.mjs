@@ -9,6 +9,7 @@
 //   node scripts/test-nemotron.mjs photo new.jpg "Window Blinds & Slats" "Lower blinds..." public/seed/blinds.jpg
 //   node scripts/test-nemotron.mjs diff public/seed/blinds.jpg public/seed/blinds-broken.jpg "Window Blinds & Slats" 45
 //   node scripts/test-nemotron.mjs memo
+//   node scripts/test-nemotron.mjs tools            # does NEMOTRON_TEXT_MODEL support tool calling? (ai-review agent mode)
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import {
@@ -37,7 +38,7 @@ async function chat(model, messages, maxTokens = 1500) {
   const res = await fetch(`${BASE}/chat/completions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: maxTokens, stream: false }),
+    body: JSON.stringify({ model, messages, temperature: 0.1, top_p: 0.9, max_tokens: maxTokens, stream: false }), // same as Edge Functions
     signal: AbortSignal.timeout(20_000), // same 20 s budget as the Edge Functions
   });
   const body = await res.text();
@@ -71,6 +72,29 @@ try {
       before_captured_at: '2026-08-18T15:14:00Z', after_captured_at: '2026-11-07T15:30:00Z' };
     const answer = await chat(need('NEMOTRON_VLM_MODEL'), damageDiffMessages(item, await image(beforePath), await image(afterPath)));
     show('suggestion + fee (normalized)', applyFees(normalizeDiff(parseModelJson(answer)), Number(charge)));
+  } else if (cmd === 'tools') {
+    const model = need('NEMOTRON_TEXT_MODEL');
+    const res = await fetch(`${BASE}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        model, temperature: 0.1, top_p: 0.9, max_tokens: 400, stream: false, tool_choice: 'auto',
+        messages: [{ role: 'system', content: 'You are an inspection agent. Work only through the tools.' },
+                   { role: 'user', content: 'Review unit FH-304B. Start with list_items.' }],
+        tools: [{ type: 'function', function: { name: 'list_items', description: 'List the checklist items of this unit.', parameters: { type: 'object', properties: {} } } }],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const body = await res.text();
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${body.slice(0, 600)}`);
+    const calls = JSON.parse(body).choices?.[0]?.message?.tool_calls ?? [];
+    if (calls.length) {
+      console.log(`✅ ${model} supports tool calling: it called ${calls.map((c) => c.function?.name).join(', ')}.`);
+      console.log('   ai-review will run in agent mode.');
+    } else {
+      console.log(`⚠️  ${model} answered without calling a tool, so ai-review will fall back to pipeline mode.`);
+      console.log('   Try another Nemotron text model to get agent mode (see: node scripts/test-nemotron.mjs models).');
+    }
   } else if (cmd === 'memo') {
     const unit = { unit_code: 'FH-304B', building_name: 'Founders Hall', room_number: '304-B', assigned_student_name: 'Alex Rivera' };
     const items = [
@@ -83,11 +107,16 @@ try {
     const answer = await chat(need('NEMOTRON_TEXT_MODEL'), memoMessages(unit, items), 2000);
     show('memo (normalized)', normalizeMemo(parseModelJson(answer), ['sink']));
   } else {
-    console.log('Commands: models | photo | diff | memo  (examples at the top of scripts/test-nemotron.mjs)');
+    console.log('Commands: models | photo | diff | memo | tools  (examples at the top of scripts/test-nemotron.mjs)');
   }
 } catch (err) {
   console.error(`\n❌ ${err.message}`);
   if (/did not return JSON/.test(err.message)) console.error('   The model answered in prose. Try another model, or tighten the prompt in prompts.js.');
-  if (/HTTP 4\d\d/.test(err.message)) console.error('   Check the API key and the model ID (run: node scripts/test-nemotron.mjs models).');
+  if (cmd === 'tools' && /HTTP 4(00|22)/.test(err.message)) {
+    console.error('   This model rejected tool calling, so ai-review will fall back to pipeline mode.');
+    console.error('   Try another Nemotron text model to get agent mode (see: node scripts/test-nemotron.mjs models).');
+  } else if (/HTTP 4\d\d/.test(err.message)) {
+    console.error('   Check the API key and the model ID (run: node scripts/test-nemotron.mjs models).');
+  }
   process.exit(1);
 }

@@ -178,14 +178,33 @@ export function normalizeMemo(raw, disputedIds) {
   };
 }
 
+// ───────────── 4. Review agent (tool calling) ─────────────
+export const AGENT_SYSTEM =
+  'You are the Walkthrough inspection agent for a university housing office. Work only through the tools. ' +
+  'Steps: 1) list_items. 2) compare_photos for EVERY item that has photos; call them together in one turn. ' +
+  '3) calculate_fee for every item whose comparison suggests NEW_DAMAGE_BILLABLE or PRE_EXISTING_DAMAGE. ' +
+  '4) get_dispute_evidence for every item with a dispute. 5) submit_review exactly once. ' +
+  'Never invent evidence or amounts; quote fees only from calculate_fee. Keep text short and neutral.';
+
+/** @param {{ unit_code: string, building_name: string, room_number: string }} unit */
+export const agentTask = (unit) =>
+  `Review unit ${unit.unit_code} (${unit.building_name} ${unit.room_number}). Start with list_items.`;
+
 // ───────────── Parsing ─────────────
-// Models sometimes add reasoning (<think>…</think>), code fences, or chatter around the JSON.
+// Nemotron reasoning models emit <think>…</think> (which can contain braces), and models sometimes
+// add code fences or chatter around the JSON. Strip all of that first; always fail with a clean error.
 export function parseModelJson(answer) {
-  const cleaned = String(answer)
+  const cleaned = String(answer ?? '')
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .replace(/```(?:json)?/gi, '');
+    .replace(/<think>[\s\S]*$/i, '') // reasoning cut off mid-thought: no JSON follows it
+    .replace(/```(?:json)?/gi, '')
+    .trim();
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
   if (start < 0 || end <= start) throw new Error('Model did not return JSON');
-  return JSON.parse(cleaned.slice(start, end + 1));
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    throw new Error('Model returned malformed JSON');
+  }
 }
