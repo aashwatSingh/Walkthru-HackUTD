@@ -3,7 +3,7 @@
 // Advisory only: the student flow never waits on or is blocked by this result.
 import { json, preflight } from '../_shared/cors.ts';
 import { nemotron, VLM_MODEL } from '../_shared/nemotron.ts';
-import { normalizePhotoCheck, parseModelJson, photoCheckMessages } from '../_shared/prompts.js';
+import { normalizePhotoCheck, parseModelJson, photoCheckMessages } from '../_shared/prompts.mjs';
 import { loadImage, requireUser, serviceClient } from '../_shared/supabase.ts';
 
 Deno.serve(async (req) => {

@@ -635,7 +635,7 @@ PUBLIC_SITE_URL=https://walkthru.vercel.app       # so functions can fetch /seed
 
 **Deploying the Edge Functions (P1, no Docker needed):**
 - **Easiest: deploy in the browser.** Supabase Dashboard → **Edge Functions → Deploy a new function → Via Editor**. Name it exactly `photo-check` (then repeat for `ai-review`), paste the code from `supabase/functions/<name>/`, and click Deploy. No local Docker or Supabase CLI needed. The repo stays the source of truth, so re-paste after every change.
-  - The editor deploys each function on its own, so `../_shared/` imports won't resolve. Add the `_shared/` files (`cors.ts`, `nemotron.ts`, `prompts.js`, `supabase.ts`, and for `ai-review` also `agent.ts`) as files inside each function and change `'../_shared/` to `'./` in the imports.
+  - The editor deploys each function on its own, so `../_shared/` imports won't resolve. Add the `_shared/` files (`cors.ts`, `nemotron.ts`, `prompts.mjs`, `supabase.ts`, and for `ai-review` also `agent.ts`) as files inside each function and change `'../_shared/` to `'./` in the imports.
   - Then turn **off** JWT verification in each function's settings (the toggle may read "Verify JWT with legacy secret"). This matches the CLI flag below.
 - **If you deploy with the CLI instead:**
   ```bash
@@ -773,7 +773,7 @@ Vite + React + Tailwind + router + `vercel.json`; deploy the empty app to Vercel
 
 **Design principle to say out loud:** *Nemotron proposes, code computes, humans decide.* The model classifies and plans; the fee schedule (code) sets every dollar amount; an admin approves every status.
 
-### 8.1 NVIDIA client and parsing — `_shared/nemotron.ts`, `_shared/prompts.js`
+### 8.1 NVIDIA client and parsing — `_shared/nemotron.ts`, `_shared/prompts.mjs`
 **Low-latency, deterministic settings** for every call (vision, text, and tool selection):
 ```ts
 // _shared/nemotron.ts
@@ -785,7 +785,7 @@ export const SAMPLING = { temperature: 0.1, top_p: 0.9 } as const;
 ```
 **Zero JSON-parse crashes:** Nemotron reasoning models can emit `<think>…</think>` blocks that contain braces, and models sometimes add code fences or chatter. Everything goes through one parser that strips those first and **always fails with a clean, catchable error**:
 ```js
-// _shared/prompts.js
+// _shared/prompts.mjs
 export function parseModelJson(answer) {
   const cleaned = String(answer ?? '')
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
@@ -811,7 +811,7 @@ Every parsed answer is then **normalized** (`normalizePhotoCheck`, `normalizeDif
 - Comparisons are cached per item: `calculate_fee` and the coverage check reuse them instead of calling Nemotron again.
 
 ### 8.2 `photo-check` — Capture Coach (vision model)
-`POST { itemId, phase: 'before' | 'after' }`, called right after each upload, **not awaited**. RLS proves the caller owns the item. The vision model gets the new photo, plus the move-in photo at move-out, and returns `{ ok, shows_item, framing_ok, lighting_ok, sharp, matches_reference_angle, retake_tip }`. The result is saved to `ai_reviews`. Advisory only: it never blocks the student. Videos return `{ skipped: true }`. Prompt: `photoCheckMessages()` in `_shared/prompts.js`.
+`POST { itemId, phase: 'before' | 'after' }`, called right after each upload, **not awaited**. RLS proves the caller owns the item. The vision model gets the new photo, plus the move-in photo at move-out, and returns `{ ok, shows_item, framing_ok, lighting_ok, sharp, matches_reference_angle, retake_tip }`. The result is saved to `ai_reviews`. Advisory only: it never blocks the student. Videos return `{ skipped: true }`. Prompt: `photoCheckMessages()` in `_shared/prompts.mjs`.
 
 ### 8.3 `ai-review` — the tool-calling inspection agent
 `POST { unitId }`, admin only, unit must be `COMPLETED`.

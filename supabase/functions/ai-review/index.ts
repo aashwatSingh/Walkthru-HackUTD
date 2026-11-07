@@ -22,7 +22,7 @@ import {
   normalizeDiff,
   normalizeMemo,
   parseModelJson,
-} from '../_shared/prompts.js';
+} from '../_shared/prompts.mjs';
 import { loadImage, requireUser, serviceClient } from '../_shared/supabase.ts';
 
 type Item = {

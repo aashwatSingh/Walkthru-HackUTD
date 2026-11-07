@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Try Walkthrough's Nemotron prompts on local photos, no Supabase needed.
-// Uses the SAME prompts as the Edge Functions (supabase/functions/_shared/prompts.js).
+// Uses the SAME prompts as the Edge Functions (supabase/functions/_shared/prompts.mjs).
 //
 //   export NVIDIA_API_KEY=nvapi-...                 # from build.nvidia.com
 //   node scripts/test-nemotron.mjs models            # list Nemotron models your key can call
@@ -15,7 +15,7 @@ import { extname } from 'node:path';
 import {
   applyFees, damageDiffMessages, memoMessages, normalizeDiff, normalizeMemo,
   normalizePhotoCheck, parseModelJson, photoCheckMessages,
-} from '../supabase/functions/_shared/prompts.js';
+} from '../supabase/functions/_shared/prompts.mjs';
 
 const BASE = (process.env.NIM_BASE_URL ?? 'https://integrate.api.nvidia.com/v1/chat/completions').replace(/\/chat\/completions$/, '');
 const KEY = process.env.NVIDIA_API_KEY;
@@ -111,7 +111,7 @@ try {
   }
 } catch (err) {
   console.error(`\n❌ ${err.message}`);
-  if (/did not return JSON/.test(err.message)) console.error('   The model answered in prose. Try another model, or tighten the prompt in prompts.js.');
+  if (/did not return JSON/.test(err.message)) console.error('   The model answered in prose. Try another model, or tighten the prompt in prompts.mjs.');
   if (cmd === 'tools' && /HTTP 4(00|22)/.test(err.message)) {
     console.error('   This model rejected tool calling, so ai-review will fall back to pipeline mode.');
     console.error('   Try another Nemotron text model to get agent mode (see: node scripts/test-nemotron.mjs models).');

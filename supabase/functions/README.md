@@ -13,7 +13,7 @@ Neither function writes `condition_status` or `estimated_fine`; the admin applie
 _shared/cors.ts       CORS headers + json() helper (every response carries CORS headers)
 _shared/nemotron.ts   NVIDIA chat-completions client: temperature 0.1, top_p 0.9, tool calling, 20 s timeout per call
 _shared/agent.ts      tool-calling loop: runs the model's tool calls in parallel, step/time budget, trace for the UI
-_shared/prompts.js    the prompts, output checks, and fee rules (also used by scripts/test-nemotron.mjs)
+_shared/prompts.mjs    the prompts, output checks, and fee rules (also used by scripts/test-nemotron.mjs)
 _shared/supabase.ts   sign-in check, service-role client, image loading
 photo-check/index.ts
 ai-review/index.ts
@@ -34,7 +34,7 @@ ai-review/index.ts
    node scripts/test-nemotron.mjs memo
    node scripts/test-nemotron.mjs tools   # agent mode needs a text model that supports tool calling
    ```
-   If a model rejects two images in one request or answers in prose instead of JSON, try the next model. Prompt changes go in `_shared/prompts.js`, so the deployed functions get them too.
+   If a model rejects two images in one request or answers in prose instead of JSON, try the next model. Prompt changes go in `_shared/prompts.mjs`, so the deployed functions get them too.
 
 ## 2. Set the secrets
 Supabase Dashboard → **Edge Functions → Secrets** (or `npx supabase secrets set NAME=value --project-ref <ref>`):
@@ -59,7 +59,7 @@ npx supabase functions deploy ai-review --no-verify-jwt --project-ref <project-r
 ```
 `--no-verify-jwt` is required: each function checks the caller itself (`requireUser` in `_shared/supabase.ts`).
 
-**Dashboard (no CLI or Docker):** Edge Functions → Deploy a new function → Via Editor, once per function. The editor deploys each function on its own, so add the `_shared/` files (`cors.ts`, `nemotron.ts`, `prompts.js`, `supabase.ts`, plus `agent.ts` for `ai-review`) as files inside the function and change `'../_shared/` to `'./` in `index.ts`. Then turn **off** JWT verification in the function's settings.
+**Dashboard (no CLI or Docker):** Edge Functions → Deploy a new function → Via Editor, once per function. The editor deploys each function on its own, so add the `_shared/` files (`cors.ts`, `nemotron.ts`, `prompts.mjs`, `supabase.ts`, plus `agent.ts` for `ai-review`) as files inside the function and change `'../_shared/` to `'./` in `index.ts`. Then turn **off** JWT verification in the function's settings.
 
 ## 4. Call them from the app
 ```js
