@@ -42,8 +42,8 @@ Supabase Dashboard → **Edge Functions → Secrets** (or `npx supabase secrets 
 | Secret | Value |
 |---|---|
 | `NVIDIA_API_KEY` | `nvapi-...` |
-| `NEMOTRON_VLM_MODEL` | the vision model ID from step 1 |
-| `NEMOTRON_TEXT_MODEL` | the text model ID from step 1 |
+| `NEMOTRON_VLM_MODEL` | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
+| `NEMOTRON_TEXT_MODEL` | `nvidia/nemotron-3.5-super-vl-120b-a12b` (same model) |
 | `PUBLIC_SITE_URL` | the Vercel URL, e.g. `https://walkthru.vercel.app` (used to load `/seed/` photos) |
 | `AI_REVIEW_CONCURRENCY` | optional; max vision calls at once. `2` if NVIDIA returns 429 rate-limit errors (default `4`) |
 | `AI_REVIEW_MODE` | optional; `pipeline` skips the agent (e.g. if your text model can't call tools). Default `agent` |

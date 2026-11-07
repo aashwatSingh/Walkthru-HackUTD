@@ -28,7 +28,7 @@ export async function requireUser(
 export const serviceClient = () =>
   createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // seed photos are < 250 KB, uploads ~150–250 KB
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // photos should be < 150 KB (NVIDIA rejects large inline images with HTTP 415)
 
 // Loads a stored photo as a Nemotron image part.
 // '/seed/...' paths are served by the Vercel app; everything else lives in the private bucket.

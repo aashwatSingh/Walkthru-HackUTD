@@ -29,7 +29,7 @@ function need(name) {
 async function image(path) {
   const mime = { '.png': 'image/png', '.webp': 'image/webp' }[extname(path).toLowerCase()] ?? 'image/jpeg';
   const bytes = await readFile(path);
-  if (bytes.length > 250_000) console.warn(`⚠️  ${path} is ${Math.round(bytes.length / 1000)} KB (spec: seed photos < 250 KB)`);
+  if (bytes.length > 150_000) console.warn(`⚠️  ${path} is ${Math.round(bytes.length / 1000)} KB; NVIDIA may reject it (HTTP 415). Shrink to < 150 KB, 1024 px.`);
   return { type: 'image_url', image_url: { url: `data:${mime};base64,${bytes.toString('base64')}` } };
 }
 
@@ -112,7 +112,9 @@ try {
 } catch (err) {
   console.error(`\n❌ ${err.message}`);
   if (/did not return JSON/.test(err.message)) console.error('   The model answered in prose. Try another model, or tighten the prompt in prompts.mjs.');
-  if (cmd === 'tools' && /HTTP 4(00|22)/.test(err.message)) {
+  if (/HTTP 415/.test(err.message)) {
+    console.error('   The photos are too large for NVIDIA. Shrink them to under 150 KB (1024 px wide) and try again.');
+  } else if (cmd === 'tools' && /HTTP 4(00|22)/.test(err.message)) {
     console.error('   This model rejected tool calling, so ai-review will fall back to pipeline mode.');
     console.error('   Try another Nemotron text model to get agent mode (see: node scripts/test-nemotron.mjs models).');
   } else if (/HTTP 4\d\d/.test(err.message)) {

@@ -1,4 +1,4 @@
-# 🛠️ Walkthrough — Master Build Specification (v2.4)
+# 🛠️ Walkthrough — Master Build Specification (v2.5)
 
 > **HackUTD · Target: NVIDIA challenge — "Use Nemotron beyond a chatbot"**
 > Repo: [`Walkthru-HackUTD`](https://github.com/aashwatSingh/Walkthru-HackUTD) · Stack: React (Vite) + Supabase (Postgres, Auth, Storage, Edge Functions) + NVIDIA Nemotron · Deploy: Vercel
@@ -517,7 +517,7 @@ update profiles set full_name = 'Priya Nair'   where email = 'priya.nair@univers
 
 **Seed images:** put 6 photos in `public/seed/`: `door.jpg`, `desk.jpg` (visible scratch), `desk-water-ring.jpg`, `blinds.jpg`, `blinds-broken.jpg`, `sink.jpg` (hairline crack). **Best option: photograph a real room at the venue or hotel.** Real damage gives Nemotron something real to find. Don't hot-link external image URLs; they can break or be blocked on venue Wi-Fi.
 
-**Compress the seed photos before committing them:** each must be **under 250 KB** and **at most 1200 px wide** (JPEG quality ≈ 80; lower it if a file is still over 250 KB). `ai-review` base64-encodes two photos per item inside an Edge Function, and small files keep it far from memory and payload limits. Use [Squoosh](https://squoosh.app) in the browser, or ImageMagick: `magick mogrify -resize '1200x>' -quality 80 public/seed/*.jpg`. Compress **before** running `hash-seed.mjs` so the fingerprints match the final files. Check sizes with `ls -lh public/seed`.
+**Compress the seed photos before committing them:** each must be **under 150 KB** and **at most 1024 px wide** (JPEG quality ≈ 75; lower it if a file is still over 150 KB). NVIDIA's API rejects large inline images with **HTTP 415**; full-size phone photos (5–6 MB) fail. `ai-review` base64-encodes two photos per item inside an Edge Function, and small files keep it far from memory and payload limits. Use [Squoosh](https://squoosh.app) in the browser, or ImageMagick: `magick mogrify -resize '1024x>' -quality 75 public/seed/*.jpg` (or open each photo in Paint → Ctrl+W → 1024 px wide → Save as JPEG). Compress **before** running `hash-seed.mjs` so the fingerprints match the final files. Check sizes with `ls -lh public/seed`.
 
 After the seed photos exist, generate the SHA-256 fingerprints and paste the output into the SQL editor. The example seed rows below intentionally omit the `*_sha256` values so that the integrity badge step can populate them explicitly.
 
@@ -673,10 +673,10 @@ Everyone codes against these signatures from hour 1. If `VITE_SUPABASE_URL` is m
 | `getAiReviews(itemIds)`, `getLatestUnitReport(unitId)` | admin (+ student photo checks) | Latest result per item/kind |
 
 **Upload sequence** (`uploadStudentMedia`):
-1. Images: resize on a canvas to **max 1280 px** (longest side) at **JPEG quality 0.80**, about 150–250 KB per photo. Uploads stay fast on venue Wi-Fi and base64 payloads stay small for Nemotron. Videos: `CameraCapture` stops recording at **15 s**; also reject anything over **50 MB** with a friendly message.
+1. Images: resize on a canvas to **max 1024 px** (longest side) at **JPEG quality 0.75**, about 80–150 KB per photo. This is required, not optional: NVIDIA's API rejects full-size phone photos with HTTP 415. Uploads stay fast on venue Wi-Fi and base64 payloads stay small for Nemotron. Videos: `CameraCapture` stops recording at **15 s**; also reject anything over **50 MB** with a friendly message.
    ```js
    // src/lib/image.js
-   export async function compressImage(file, maxSide = 1280, quality = 0.8) {
+   export async function compressImage(file, maxSide = 1024, quality = 0.75) {
      const img = new Image();
      img.src = URL.createObjectURL(file);
      await img.decode();                       // modern browsers apply the photo's rotation here
@@ -805,7 +805,7 @@ export function parseModelJson(answer) {
 Every parsed answer is then **normalized** (`normalizePhotoCheck`, `normalizeDiff`, `normalizeMemo`): unknown statuses become `NEEDS_HUMAN_REVIEW`, confidence is clamped to 0–1, briefs for non-disputed items are dropped. A bad answer can make one item "review manually"; it can never crash the run.
 
 **Minimal token overhead**
-- Photos are ~150–250 KB (Sections 4.5, 6) and go **only to the vision model**. The planning model never receives an image; it sees compact JSON tool results (capped at 3,000 characters each).
+- Photos are ~80–150 KB (Sections 4.5, 6) and go **only to the vision model**. The planning model never receives an image; it sees compact JSON tool results (capped at 3,000 characters each).
 - `max_tokens`: 1,000 per agent round, 1,200 for photo checks, 1,500 for comparisons.
 - Prompts ask for one exact JSON shape, with no examples to pay for on every call.
 - Comparisons are cached per item: `calculate_fee` and the coverage check reuse them instead of calling Nemotron again.
@@ -980,3 +980,7 @@ Shown in two places: a **unit-level drawer** opened by "Run Nemotron Review" (CO
 - **Parser:** strips `<think>` blocks (including unclosed ones), fences and chatter, and always fails with a clean error (Section 8.1).
 - **New `AiReviewPanel` spec** with the agent timeline (Section 8.4). Section 8 now points to the real code in `supabase/functions/` instead of draft snippets.
 - `scripts/test-nemotron.mjs tools` checks whether a text model supports tool calling.
+
+## 17. Changes in v2.5
+- **Smaller photos, required:** student uploads are resized to 1024 px at JPEG quality 0.75 (~80–150 KB), and seed photos must be under 150 KB. Testing with Nemotron 3.5 Super VL showed that full-size phone photos (~6 MB) are rejected with HTTP 415 (Sections 4.5, 6, 8.1).
+- **Model chosen:** `nvidia/nemotron-3.5-super-vl-120b-a12b` for both `NEMOTRON_VLM_MODEL` and `NEMOTRON_TEXT_MODEL`. Confirmed with a real API key: it supports tool calling, so `ai-review` runs in agent mode.
