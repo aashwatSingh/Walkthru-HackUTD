@@ -1,7 +1,7 @@
-# 🛠️ Walkthrough — Master Build Specification (v2.1)
+# 🛠️ Walkthrough — Master Build Specification (v2.2)
 
 > **HackUTD · Target: NVIDIA challenge — "Use Nemotron beyond a chatbot"**
-> Repo: [`Walkthru-HackUTD`](https://github.com/aashwatSingh/Walkthru-HackUTD) · Stack: React (Vite) + Supabase (Postgres, Auth, Storage, Edge Functions) + NVIDIA Nemotron · Deploy: Vercel
+> Native build edition · Repo: [`Walkthru-HackUTD`](https://github.com/aashwatSingh/Walkthru-HackUTD) · Stack: React (Vite) + Supabase (Postgres, Auth, Storage, Edge Functions) + NVIDIA Nemotron · Deploy: Vercel
 
 > **How to use this file**
 > 1. Every teammate reads Sections 1–4 (10 minutes). That's the shared contract.
@@ -515,9 +515,11 @@ update profiles set full_name = 'Priya Nair'   where email = 'priya.nair@univers
 
 ### 4.5 `003_seed.sql` — sample data
 
-**Seed images:** put 6 photos in `public/seed/`: `door.jpg`, `desk.jpg` (visible scratch), `desk-water-ring.jpg`, `blinds.jpg`, `blinds-broken.jpg`, `sink.jpg` (hairline crack). **Best option: photograph a real room at the venue or hotel.** Real damage gives Nemotron something real to find. Don't hot-link external image URLs; they can break or be blocked on venue Wi-Fi.
+**Seed images:** put 6 photos in `public/seed/`: `door.jpg`, `desk.jpg` (visible scratch), `desk-water-ring.jpg`, `blinds.jpg`, `blinds-broken.jpg`, `sink.jpg` (hairline crack). **Best option: photograph a real room at the venue or hotel.** Real damage gives Nemotron something real to find. Don't hot-link external image URLs; they can break or be blocked on venue Wi‑Fi.
 
 **Compress the seed photos before committing them:** each must be **under 250 KB** and **at most 1200 px wide** (JPEG quality ≈ 80; lower it if a file is still over 250 KB). `ai-review` base64-encodes two photos per item inside an Edge Function, and small files keep it far from memory and payload limits. Use [Squoosh](https://squoosh.app) in the browser, or ImageMagick: `magick mogrify -resize '1200x>' -quality 80 public/seed/*.jpg`. Compress **before** running `hash-seed.mjs` so the fingerprints match the final files. Check sizes with `ls -lh public/seed`.
+
+After the seed photos exist, generate the SHA-256 fingerprints and paste the output into the SQL editor. The example seed rows below intentionally omit the `*_sha256` values so that the integrity badge step can populate them explicitly.
 
 ```sql
 insert into checklist_template (step_order, zone_category, item_name, instruction_text, standard_charge) values
@@ -605,7 +607,8 @@ Walkthru-HackUTD/
 ├─ supabase/
 │  ├─ migrations/001_schema.sql, 002_policies.sql, 003_seed.sql
 │  └─ functions/_shared/{nemotron.ts,cors.ts}, photo-check/index.ts, ai-review/index.ts
-├─ scripts/hash-seed.mjs
+├─ scripts/
+│  └─ hash-seed.mjs
 ├─ vercel.json      # { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
 └─ .env.example
 ```
@@ -709,7 +712,7 @@ Vite + React + Tailwind + router + `vercel.json`; deploy the empty app to Vercel
 
 ### Increment 1 — Data layer
 `001`/`002`/`003` SQL run; demo users created; `dbService.js` + `mockDb.js` + `mockData.js` + `rules.js`.
-**Done when:** a scratch page lists FH-304B's 4 items in **both** mock mode and Supabase mode, and tests T1–T4 from Section 4.3 fail as expected.
+**Done when:** a scratch page lists FH-304B's 4 items in **both** mock mode and Supabase mode, and tests T1–T7 from Section 4.3 fail as expected.
 
 ### Increment 2 — Auth, 2FA gate, routing, demo switcher
 - `/login`: email + password → `signIn` → **TwoFactorModal** (6 boxes, auto-advance, paste support). Accepts `123456`; show a small "Demo code: 123456" hint. Store `mfaVerified` in `sessionStorage`.
