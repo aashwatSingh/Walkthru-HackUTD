@@ -246,9 +246,10 @@ export const agentTask = (unit) =>
 // Nemotron reasoning models emit <think>…</think> (which can contain braces), and models sometimes add code
 // fences, chatter, a trailing comma or a // comment. Strip/repair all of that; if it still fails, the error
 // carries a snippet of what the model actually said, so the logs explain themselves.
-const snippet = (s) => {
+const snippet = (s, withEnd = false) => {
   const flat = String(s).replace(/\s+/g, ' ').trim();
-  return flat.length > 140 ? `${flat.slice(0, 140)}…` : flat;
+  if (flat.length <= 140) return flat;
+  return withEnd ? `${flat.slice(0, 80)} … ${flat.slice(-80)} (${flat.length} chars)` : `${flat.slice(0, 140)}…`;
 };
 
 // The first complete top-level {...} object, ignoring braces inside strings; null if it never closes (cut off).
@@ -296,6 +297,6 @@ export function parseModelJson(answer) {
   throw new Error(
     balanced
       ? `Model returned malformed JSON: ${snippet(cleaned.slice(start))}`
-      : `Model output was cut off before the JSON ended: ${snippet(cleaned.slice(start))}`,
+      : `Model output was cut off before the JSON ended: ${snippet(cleaned.slice(start), true)}`,
   );
 }

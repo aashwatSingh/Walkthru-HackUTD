@@ -167,7 +167,8 @@ await check('7. Full inspection agent (multi-step workflow + tool integration)',
   const cache = new Map();
   const compare = (it) => {
     if (!cache.has(it.id)) {
-      cache.set(it.id, (async () => P.applyFees(await vision.compareImages(VLM, it, await image(it.before_media_path), await image(it.after_media_path)), it.standard_charge))());
+      cache.set(it.id, (async () => P.applyFees(await vision.compareImages(VLM, it, await image(it.before_media_path), await image(it.after_media_path)), it.standard_charge))()
+        .catch((err) => { cache.delete(it.id); throw err; })); // failures aren't cached: the agent can retry
     }
     return cache.get(it.id);
   };
@@ -210,7 +211,8 @@ await check('8. Is reasoning-off faster? (optional speed-up)', async () => {
 });
 
 // ───────────── verdict ─────────────
-const slowest = Math.max(...results.map((r) => r.ms));
+// Slowest SINGLE call (checks 1-6 and 8 are one call each; check 7 is many, so use its per-tool timings).
+const slowest = Math.max(...results.filter((r) => !r.name.startsWith('7.')).map((r) => r.ms), ...(agentRun?.trace ?? []).map((s) => s.ms));
 out('\n══════════ SUMMARY ══════════');
 for (const r of results) out(`${r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️ ' : '❌'} ${r.name}  (${secs(r.ms)})`);
 const fails = results.filter((r) => r.status === 'fail');

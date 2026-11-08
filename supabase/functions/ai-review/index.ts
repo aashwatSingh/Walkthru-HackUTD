@@ -98,6 +98,9 @@ Deno.serve(async (req) => {
         ]);
         // One call with both photos; two calls automatically if the model accepts one image per request.
         return applyFees(await compareImages(vlm, item, before, after), item.standard_charge);
+      }).catch((err) => {
+        comparisons.delete(item.id); // don't cache failures: the agent's next call for this item retries for real
+        throw err;
       }));
     }
     return comparisons.get(item.id)!;
