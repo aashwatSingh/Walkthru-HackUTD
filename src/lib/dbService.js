@@ -40,8 +40,12 @@ export const getLatestUnitReport = (...a) => impl.getLatestUnitReport(...a);
 // Demo helpers: the switcher and quick-login buttons work in mock mode, or live when VITE_DEMO_PASSWORD is set.
 export const DEMO_PASSWORD = isMock ? 'demo1234' : import.meta.env.VITE_DEMO_PASSWORD || '';
 export const demoEnabled = isMock || !!import.meta.env.VITE_DEMO_PASSWORD;
+// The housing admin never uses the bundled demo password on real Supabase: it has its own password that is not
+// in the website's code, typed at login (then the 2FA code). Students stay one-click for judges. In mock mode
+// there is nothing to protect, so Admin stays one-click (VITE_ADMIN_NEEDS_PASSWORD=true forces the prompt, for tests).
+export const ADMIN_NEEDS_PASSWORD = !isMock || import.meta.env.VITE_ADMIN_NEEDS_PASSWORD === 'true';
 export const DEMO_USERS = [
-  { key: 'admin', label: 'Admin', note: 'desktop dashboard', email: 'housing.admin@university.edu', unit: null },
+  { key: 'admin', label: 'Admin', note: ADMIN_NEEDS_PASSWORD ? 'password required' : 'desktop dashboard', email: 'housing.admin@university.edu', unit: null, needsPassword: ADMIN_NEEDS_PASSWORD },
   { key: 'alex', label: 'Alex', note: 'completed + dispute', email: 'alex.rivera@university.edu', unit: 'FH-304B' },
   { key: 'jordan', label: 'Jordan', note: 'live move-in', email: 'jordan.lee@university.edu', unit: 'FH-210A' },
   { key: 'sam', label: 'Sam', note: 'live move-out', email: 'sam.patel@university.edu', unit: 'BB-112' },
