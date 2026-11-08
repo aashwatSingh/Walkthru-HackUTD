@@ -193,7 +193,7 @@ export default function Landing() {
           <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1.15fr_1fr]">
             <Reveal>
               <div className="hud-frame scanlines relative grid grid-cols-2 gap-px overflow-hidden rounded-md border border-cyan-400/30 bg-black">
-                {[['T0 // MOVE-IN', '/seed/blinds.jpg', 'Move-in photo of the window blinds, intact'], ['T1 // MOVE-OUT', '/seed/blinds-broken.jpg', 'Move-out photo of a door']].map(([label, src, alt]) => (
+                {[['T0 // MOVE-IN', '/landing/move-in.jpg', 'Move-in photo of window blinds, intact'], ['T1 // MOVE-OUT', '/landing/move-out.jpg', 'Move-out photo of window blinds, slats broken']].map(([label, src, alt]) => (
                   <figure key={label} className="relative">
                     <img src={src} alt={alt} className="aspect-[3/4] w-full object-cover" />
                     <figcaption className="absolute left-2 top-2 z-[4] rounded-[2px] border border-cyan-400/30 bg-black/70 px-2 py-0.5 font-mono text-[10px] text-cyan-100">{label}</figcaption>
