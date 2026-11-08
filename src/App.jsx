@@ -8,6 +8,7 @@ import QrGenerator from './admin/QrGenerator.jsx';
 import ReportPage from './report/ReportPage.jsx';
 import { Spinner } from './components/ui.jsx';
 import { homeFor } from './lib/rules.js';
+import Landing from './landing/Landing.jsx';
 
 function Home() {
   const { profile, loading, mfaVerified } = useAuth();
@@ -18,7 +19,7 @@ function Home() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/switching" element={<Spinner label="Switching user…" />} />
       {/* Students: the page a door QR code opens, plus a shortcut to their own room */}

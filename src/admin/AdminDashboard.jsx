@@ -55,24 +55,24 @@ export default function AdminDashboard() {
   return (
     <AppShell wide>
       <div className="space-y-5">
-        <h1 className="text-2xl font-bold">Housing dashboard</h1>
+        <h1 className="font-heading tracking-tight text-2xl font-bold">Housing dashboard</h1>
         <KpiCards units={units} rows={rows} />
         <Charts rows={rows} />
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="mb-3 font-semibold">Units</h2>
+        <section className="rounded-2xl border border-white/10 bg-card p-4 shadow-sm">
+          <h2 className="font-heading tracking-tight mb-3 font-semibold">Units</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {units.map((u) => (
-              <div key={u.id} className="space-y-2 rounded-xl border border-slate-200 p-3" data-testid="unit-card">
+              <div key={u.id} className="space-y-2 rounded-xl border border-white/10 p-3" data-testid="unit-card">
                 <div className="flex items-start justify-between gap-2">
-                  <div><p className="font-semibold">{u.unit_code}</p><p className="text-xs text-slate-500">{u.building_name} · {u.assigned_student_name}</p></div>
+                  <div><p className="font-semibold">{u.unit_code}</p><p className="text-xs text-muted-foreground">{u.building_name} · {u.assigned_student_name}</p></div>
                   <PhaseBadge phase={u.inspection_phase} />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {u.inspection_phase === 'MOVE_IN_LOCKED' && <button onClick={() => startMoveOut(u)} className="flex items-center gap-1 rounded-lg bg-orange-600 px-2.5 py-1.5 text-xs font-semibold text-white"><Unlock size={13} /> Open move-out</button>}
-                  {u.inspection_phase === 'COMPLETED' && <button onClick={() => setReviewUnit(u)} className="flex items-center gap-1 rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-semibold text-white"><Sparkles size={13} /> Run Nemotron Review</button>}
-                  {u.inspection_phase === 'COMPLETED' && <Link to={`/report/${u.unit_code}`} className="flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium"><FileText size={13} /> View report</Link>}
-                  {(u.inspection_phase === 'MOVE_IN_OPEN' || u.inspection_phase === 'MOVE_OUT_OPEN') && <span className="text-xs text-slate-500">Waiting on the student</span>}
+                  {u.inspection_phase === 'MOVE_IN_LOCKED' && <button onClick={() => startMoveOut(u)} className="btn btn-sm btn-primary"><Unlock size={13} /> Open move-out</button>}
+                  {u.inspection_phase === 'COMPLETED' && <button onClick={() => setReviewUnit(u)} className="btn btn-sm btn-lime"><Sparkles size={13} /> Run Nemotron Review</button>}
+                  {u.inspection_phase === 'COMPLETED' && <Link to={`/report/${u.unit_code}`} className="btn btn-sm btn-outline"><FileText size={13} /> View report</Link>}
+                  {(u.inspection_phase === 'MOVE_IN_OPEN' || u.inspection_phase === 'MOVE_OUT_OPEN') && <span className="text-xs text-muted-foreground">Waiting on the student</span>}
                 </div>
               </div>
             ))}

@@ -1,6 +1,8 @@
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { STATUS_META, money } from '../lib/format.js';
 
+const TIP = { background: '#262626', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, color: '#fff' };
+
 const STATUSES = ['NO_CHANGE', 'PRE_EXISTING_DAMAGE', 'NEW_DAMAGE_BILLABLE', 'DISPUTE_UNDER_REVIEW'];
 
 export default function Charts({ rows }) {
@@ -16,16 +18,16 @@ export default function Charts({ rows }) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-1 font-semibold">Waived vs. billable, by building</h2>
-        <p className="mb-2 text-xs text-slate-500">Damage students proved was already there, vs. new damage charges.</p>
+      <section className="rounded-2xl border border-white/10 bg-card p-4 shadow-sm">
+        <h2 className="font-heading tracking-tight mb-1 font-semibold">Waived vs. billable, by building</h2>
+        <p className="mb-2 text-xs text-muted-foreground">Damage students proved was already there, vs. new damage charges.</p>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={byBuilding} margin={{ left: -10, right: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="building" tick={{ fontSize: 12 }} />
-              <YAxis tickFormatter={(v) => `$${v}`} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v) => money(v)} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+              <XAxis dataKey="building" tick={{ fontSize: 12, fill: "#b5b5b5" }} stroke="rgba(255,255,255,0.2)" />
+              <YAxis tickFormatter={(v) => `$${v}`} tick={{ fontSize: 12, fill: "#b5b5b5" }} stroke="rgba(255,255,255,0.2)" />
+              <Tooltip formatter={(v) => money(v)} cursor={{ fill: "rgba(255,255,255,0.05)" }} contentStyle={TIP} labelStyle={{ color: "#fff" }} />
               <Legend />
               <Bar isAnimationActive={false} dataKey="waived" name="Waived (pre-existing)" fill={STATUS_META.PRE_EXISTING_DAMAGE.color} radius={[4, 4, 0, 0]} />
               <Bar isAnimationActive={false} dataKey="billable" name="New damage (billable)" fill={STATUS_META.NEW_DAMAGE_BILLABLE.color} radius={[4, 4, 0, 0]} />
@@ -33,16 +35,16 @@ export default function Charts({ rows }) {
           </ResponsiveContainer>
         </div>
       </section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-1 font-semibold">Item statuses</h2>
-        <p className="mb-2 text-xs text-slate-500">All reviewed inspection items.</p>
+      <section className="rounded-2xl border border-white/10 bg-card p-4 shadow-sm">
+        <h2 className="font-heading tracking-tight mb-1 font-semibold">Item statuses</h2>
+        <p className="mb-2 text-xs text-muted-foreground">All reviewed inspection items.</p>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie isAnimationActive={false} data={byStatus} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="85%" paddingAngle={2} label={({ value }) => value}>
                 {byStatus.map((d) => <Cell key={d.key} fill={STATUS_META[d.key].color} />)}
               </Pie>
-              <Tooltip />
+              <Tooltip contentStyle={TIP} itemStyle={{ color: "#fff" }} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>

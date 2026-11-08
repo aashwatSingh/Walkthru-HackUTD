@@ -10,10 +10,10 @@ export default function CompareSlider({ beforePath, afterPath }) {
     Promise.all([getMediaUrl(beforePath), getMediaUrl(afterPath)]).then(([b, a]) => live && setUrls({ b, a }));
     return () => { live = false; };
   }, [beforePath, afterPath]);
-  if (!urls.b || !urls.a) return <div className="aspect-[4/3] animate-pulse rounded-xl bg-slate-100" />;
+  if (!urls.b || !urls.a) return <div className="aspect-[4/3] animate-pulse rounded-xl bg-white/10" />;
   return (
     <div>
-      <div className="relative aspect-[4/3] w-full select-none overflow-hidden rounded-xl bg-slate-900">
+      <div className="relative aspect-[4/3] w-full select-none overflow-hidden rounded-xl bg-black">
         <img src={urls.a} alt="Move-out" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
         <img src={urls.b} alt="Move-in" className="absolute inset-0 h-full w-full object-cover" style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }} draggable={false} />
         <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-white shadow" style={{ left: `${pos}%` }}>

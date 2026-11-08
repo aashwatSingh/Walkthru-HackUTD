@@ -84,32 +84,32 @@ export default function Wizard({ unit, items, onItemChanged, onSubmitted }) {
       <div>
         <div className="mb-1 flex items-center justify-between text-sm">
           <span className="font-medium">Step {step + 1} of {items.length}</span>
-          <span className="text-slate-500">{done} of {items.length} photographed</span>
+          <span className="text-muted-foreground">{done} of {items.length} photographed</span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-valuenow={done} aria-valuemax={items.length}>
-          <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${(done / items.length) * 100}%` }} />
+        <div className="h-2 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-valuenow={done} aria-valuemax={items.length}>
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(done / items.length) * 100}%` }} />
         </div>
         <div className="mt-2 flex gap-1.5">
           {items.map((it, i) => (
             <button key={it.id} onClick={() => { setStep(i); setRetaking(false); }} aria-label={`Go to step ${i + 1}`}
-              className={`h-2.5 flex-1 rounded-full ${i === step ? 'bg-slate-900' : it[`${phase}_media_path`] ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+              className={`h-2.5 flex-1 rounded-full ${i === step ? 'bg-white' : it[`${phase}_media_path`] ? 'bg-primary' : 'bg-white/15'}`} />
           ))}
         </div>
       </div>
 
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="space-y-3 rounded-2xl border border-white/10 bg-card p-4 shadow-sm">
         <ZoneBadge zone={item.zone_category} />
-        <h2 className="text-xl font-semibold">{item.item_name}</h2>
-        <p className="text-slate-600">{item.instruction_text}</p>
+        <h2 className="font-heading tracking-tight text-xl font-semibold">{item.item_name}</h2>
+        <p className="text-white/75">{item.instruction_text}</p>
 
         {phase === 'after' && (
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
-            <p className="mb-2 text-sm font-semibold text-indigo-900">Match this angle: your locked move-in photo</p>
+          <div className="rounded-xl border border-indigo-400/30 bg-indigo-400/10 p-3">
+            <p className="mb-2 text-sm font-semibold text-indigo-200">Match this angle: your locked move-in photo</p>
             <div className="flex gap-3">
               <MediaView path={item.before_media_path} type={item.before_media_type} alt="Move-in reference" className="h-28 w-28 shrink-0" />
-              <div className="text-sm text-indigo-900">
+              <div className="text-sm text-indigo-200">
                 <p className="font-medium">{fmtDateTime(item.before_captured_at)}</p>
-                {item.before_notes && <p className="mt-1 text-indigo-800">“{item.before_notes}”</p>}
+                {item.before_notes && <p className="mt-1 text-indigo-200">“{item.before_notes}”</p>}
               </div>
             </div>
           </div>
@@ -118,53 +118,53 @@ export default function Wizard({ unit, items, onItemChanged, onSubmitted }) {
         {path && !retaking ? (
           <div className="space-y-2">
             <MediaView path={path} type={type} alt={`${item.item_name} ${phase === 'before' ? 'move-in' : 'move-out'}`} className="max-h-96 w-full" />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Captured {fmtDateTime(item[`${phase}_captured_at`])}
               {item[`${phase}_sha256`] && <> · fingerprint <code className="font-mono">{shortHash(item[`${phase}_sha256`])}</code></>}
             </p>
             <PhotoCoach state={coach[item.id]} />
             {editable && (
               <div className="flex gap-2">
-                <button onClick={() => setRetaking(true)} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 py-2.5 font-medium"><RotateCcw size={16} /> Retake</button>
-                <button onClick={remove} className="flex items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 font-medium text-red-700"><Trash2 size={16} /> Remove</button>
+                <button onClick={() => setRetaking(true)} className="btn btn-outline btn-lg flex-1"><RotateCcw size={16} /> Retake</button>
+                <button onClick={remove} className="btn btn-danger btn-lg"><Trash2 size={16} /> Remove</button>
               </div>
             )}
           </div>
         ) : editable ? (
           <div className="space-y-2">
-            {busy ? <p className="rounded-xl bg-slate-100 p-6 text-center text-slate-600">Uploading…</p> : <MediaCapture item={item} unit={unit} phase={phase} onCapture={handleCapture} />}
-            {retaking && <button onClick={() => setRetaking(false)} className="w-full rounded-xl py-2 text-sm text-slate-500">Keep the current photo</button>}
+            {busy ? <p className="rounded-xl bg-white/10 p-6 text-center text-white/75">Uploading…</p> : <MediaCapture item={item} unit={unit} phase={phase} onCapture={handleCapture} />}
+            {retaking && <button onClick={() => setRetaking(false)} className="btn btn-ghost w-full text-muted-foreground">Keep the current photo</button>}
           </div>
         ) : (
-          <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-600">This inspection is locked.</p>
+          <p className="rounded-xl bg-white/10 p-4 text-sm text-white/75">This inspection is locked.</p>
         )}
 
         <label className="block text-sm font-medium">Condition notes (optional)
           <textarea value={noteValue} disabled={!editable} rows={2} onChange={(e) => setNotes((n) => ({ ...n, [item.id]: e.target.value }))} onBlur={saveNotes}
-            placeholder="Describe anything already damaged or worn…" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-slate-50" />
+            placeholder="Describe anything already damaged or worn…" className="field mt-1" />
         </label>
       </section>
 
       <div className="flex gap-3">
-        <button disabled={step === 0} onClick={() => { setStep(step - 1); setRetaking(false); }} className="flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-medium"><ChevronLeft size={18} /> Back</button>
+        <button disabled={step === 0} onClick={() => { setStep(step - 1); setRetaking(false); }} className="btn btn-outline btn-lg"><ChevronLeft size={18} /> Back</button>
         {step < items.length - 1 ? (
-          <button onClick={() => { saveNotes(); setStep(step + 1); setRetaking(false); }} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-slate-900 px-4 py-2.5 font-medium text-white">Next <ChevronRight size={18} /></button>
+          <button onClick={() => { saveNotes(); setStep(step + 1); setRetaking(false); }} className="btn btn-primary btn-lg flex-1">Next <ChevronRight size={18} /></button>
         ) : (
-          <button disabled={done < items.length || busy} onClick={() => { saveNotes(); setConfirming(true); }} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 font-semibold text-white">
+          <button disabled={done < items.length || busy} onClick={() => { saveNotes(); setConfirming(true); }} className="btn btn-lime btn-lg flex-1">
             <Lock size={18} /> Lock &amp; Submit Official Inspection
           </button>
         )}
       </div>
-      {step === items.length - 1 && done < items.length && <p className="text-center text-sm text-amber-700">Photograph every item to submit ({items.length - done} left).</p>}
+      {step === items.length - 1 && done < items.length && <p className="text-center text-sm text-amber-200">Photograph every item to submit ({items.length - done} left).</p>}
 
       {confirming && (
         <Modal title="Submit your official inspection?" onClose={() => setConfirming(false)}>
-          <p className="text-slate-600">
+          <p className="text-white/75">
             Once you submit, <b>nothing can be changed</b>: not by you, not by housing. Your photos and notes are stamped with the server time as your official record.
           </p>
           <div className="mt-5 flex gap-3">
-            <button onClick={() => setConfirming(false)} className="flex-1 rounded-xl border border-slate-300 py-2.5 font-medium">Go back</button>
-            <button disabled={busy} onClick={submit} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 font-semibold text-white"><Lock size={16} /> {busy ? 'Locking…' : 'Lock & submit'}</button>
+            <button onClick={() => setConfirming(false)} className="btn btn-outline btn-lg flex-1">Go back</button>
+            <button disabled={busy} onClick={submit} className="btn btn-lime btn-lg flex-1"><Lock size={16} /> {busy ? 'Locking…' : 'Lock & submit'}</button>
           </div>
         </Modal>
       )}

@@ -20,7 +20,7 @@ export default function MediaCapture({ item, unit, phase, onCapture }) {
     <div className="space-y-3">
       <CameraCapture stampText={stamp} onCapture={onCapture} />
       {isMockMode && (
-        <button type="button" onClick={useSample} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-amber-400 bg-amber-50 py-2.5 text-sm font-medium text-amber-900">
+        <button type="button" onClick={useSample} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-amber-400 bg-amber-400/10 py-2.5 text-sm font-medium text-amber-200">
           <ImagePlus size={16} /> Demo mode: use a sample photo (no camera needed)
         </button>
       )}

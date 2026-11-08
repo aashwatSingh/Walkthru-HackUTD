@@ -47,10 +47,10 @@ export default function ComparatorModal({ row, onClose, onChanged }) {
 
   const side = (phase, title) => (
     <figure className="space-y-2">
-      <figcaption className="flex flex-wrap items-center gap-2"><b>{title}</b><span className="text-sm text-slate-500">{fmtDateTime(row[`${phase}_captured_at`])}</span></figcaption>
+      <figcaption className="flex flex-wrap items-center gap-2"><b>{title}</b><span className="text-sm text-muted-foreground">{fmtDateTime(row[`${phase}_captured_at`])}</span></figcaption>
       <MediaView path={row[`${phase}_media_path`]} type={row[`${phase}_media_type`]} alt={title} className="aspect-[4/3] w-full" />
       <IntegrityBadge path={row[`${phase}_media_path`]} sha={row[`${phase}_sha256`]} capturedAt={row[`${phase}_captured_at`]} />
-      {row[`${phase}_notes`] && <p className="rounded-lg bg-slate-50 p-2 text-sm text-slate-700"><b className="text-xs uppercase text-slate-500">Student note:</b> “{row[`${phase}_notes`]}”</p>}
+      {row[`${phase}_notes`] && <p className="rounded-lg bg-white/5 p-2 text-sm text-white/85"><b className="text-xs uppercase text-muted-foreground">Student note:</b> “{row[`${phase}_notes`]}”</p>}
     </figure>
   );
 
@@ -58,11 +58,11 @@ export default function ComparatorModal({ row, onClose, onChanged }) {
     <Modal title={`${row.item_name} · ${row.unit_code} · ${row.assigned_student_name}`} onClose={onClose} wide>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <StatusBadge status={row.condition_status} />
-        <span className="text-sm text-slate-500">Fee schedule: {money(row.standard_charge)} · Current fine: <b>{money(row.estimated_fine)}</b></span>
+        <span className="text-sm text-muted-foreground">Fee schedule: {money(row.standard_charge)} · Current fine: <b>{money(row.estimated_fine)}</b></span>
         {bothImages && (
-          <div className="ml-auto flex rounded-lg bg-slate-100 p-0.5 text-sm" role="tablist">
+          <div className="ml-auto flex rounded-lg bg-white/10 p-0.5 text-sm" role="tablist">
             {[['side', 'Side by side'], ['slider', 'Slider']].map(([k, label]) => (
-              <button key={k} role="tab" aria-selected={view === k} onClick={() => setView(k)} className={`rounded-md px-3 py-1 ${view === k ? 'bg-white font-medium shadow-sm' : 'text-slate-600'}`}>{label}</button>
+              <button key={k} role="tab" aria-selected={view === k} onClick={() => setView(k)} className={`rounded-md px-3 py-1 ${view === k ? 'bg-card font-medium shadow-sm' : 'text-white/75'}`}>{label}</button>
             ))}
           </div>
         )}
@@ -71,7 +71,7 @@ export default function ComparatorModal({ row, onClose, onChanged }) {
       {view === 'slider' && bothImages ? (
         <div className="mx-auto max-w-2xl">
           <CompareSlider beforePath={row.before_media_path} afterPath={row.after_media_path} />
-          <div className="mt-2 flex justify-between gap-3 text-xs text-slate-500">
+          <div className="mt-2 flex justify-between gap-3 text-xs text-muted-foreground">
             <IntegrityBadge path={row.before_media_path} sha={row.before_sha256} capturedAt={row.before_captured_at} />
             <IntegrityBadge path={row.after_media_path} sha={row.after_sha256} capturedAt={row.after_captured_at} />
           </div>
@@ -81,26 +81,26 @@ export default function ComparatorModal({ row, onClose, onChanged }) {
       )}
 
       {row.dispute_reason && (
-        <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
           <b>Student dispute</b> ({fmtDateTime(row.disputed_at)}): {row.dispute_reason}
         </div>
       )}
 
       {ai && <div className="mt-4"><AiItemCard result={ai} row={row} onApply={async (r) => resolve(r.suggested_status, r.suggested_fine || 0, 'Suggestion applied')} applying={busy} /></div>}
 
-      <section className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <section className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
         <h3 className="flex items-center gap-2 font-semibold"><Scale size={17} /> Resolution</h3>
-        {!assess && <p className="rounded-lg bg-white p-2 text-sm text-slate-600">Items can be assessed after the student submits move-out (this unit is {row.inspection_phase.replaceAll('_', ' ').toLowerCase()}).</p>}
-        <label className="block text-sm font-medium">Comment{disputed && <span className="text-red-600"> (required for disputes)</span>}
-          <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} disabled={!assess} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100" placeholder="Visible to the student." />
+        {!assess && <p className="rounded-lg bg-card p-2 text-sm text-white/75">Items can be assessed after the student submits move-out (this unit is {row.inspection_phase.replaceAll('_', ' ').toLowerCase()}).</p>}
+        <label className="block text-sm font-medium">Comment{disputed && <span className="text-red-400"> (required for disputes)</span>}
+          <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} disabled={!assess} className="field mt-1" placeholder="Visible to the student." />
         </label>
         <label className="block max-w-[200px] text-sm font-medium">Fine if billable ($)
-          <input type="number" min="0" step="0.01" value={fine} onChange={(e) => setFine(e.target.value)} disabled={!assess} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100" />
+          <input type="number" min="0" step="0.01" value={fine} onChange={(e) => setFine(e.target.value)} disabled={!assess} className="field mt-1" />
         </label>
         <div className="flex flex-wrap gap-2">
-          <button disabled={!assess || busy} onClick={() => resolve('PRE_EXISTING_DAMAGE', 0, 'Fine waived')} className="flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white"><CheckCircle2 size={16} /> Waive Fine (Pre-Existing Proof)</button>
-          <button disabled={!assess || busy} onClick={() => resolve('NEW_DAMAGE_BILLABLE', Number(fine) || 0, 'Billable fine approved')} className="flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white"><Ban size={16} /> Approve Billable Fine</button>
-          <button disabled={!assess || busy} onClick={() => resolve('NO_CHANGE', 0, 'Marked no change')} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"><Equal size={16} /> Mark No Change</button>
+          <button disabled={!assess || busy} onClick={() => resolve('PRE_EXISTING_DAMAGE', 0, 'Fine waived')} className="btn btn-lg border-sky-400/40 bg-sky-400/15 text-sky-200 hover:bg-sky-400/30"><CheckCircle2 size={16} /> Waive Fine (Pre-Existing Proof)</button>
+          <button disabled={!assess || busy} onClick={() => resolve('NEW_DAMAGE_BILLABLE', Number(fine) || 0, 'Billable fine approved')} className="btn btn-lg border-rose-400/40 bg-rose-500/15 text-rose-200 hover:bg-rose-500/30"><Ban size={16} /> Approve Billable Fine</button>
+          <button disabled={!assess || busy} onClick={() => resolve('NO_CHANGE', 0, 'Marked no change')} className="btn btn-lg border-primary/40 bg-primary/15 text-primary hover:bg-primary/30"><Equal size={16} /> Mark No Change</button>
         </div>
       </section>
     </Modal>

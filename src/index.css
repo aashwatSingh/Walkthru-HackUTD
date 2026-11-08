@@ -1,16 +1,115 @@
 @import "tailwindcss";
 
-:root { color-scheme: light; }
-html, body, #root { min-height: 100%; }
-body { background: #f8fafc; color: #0f172a; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
-button { cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: .55; }
+/* Walkthrough design system: dark, lime accent, Bricolage Grotesque headings (from the team's Cursor prototype). */
 
-/* Print only the element marked .print-area (door flyer, inspection report) */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading: "Bricolage Grotesque", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+}
+
+:root {
+  color-scheme: dark;
+  --background: oklch(0.12 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.17 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.17 0 0);
+  --primary: oklch(0.92 0.23 127);
+  --primary-foreground: oklch(0.12 0 0);
+  --secondary: oklch(0.22 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.21 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: oklch(0.25 0.06 127);
+  --accent-foreground: oklch(0.92 0.23 127);
+  --destructive: oklch(0.7 0.19 22);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.92 0.23 127);
+  --radius: 0.875rem;
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html, body, #root { min-height: 100%; }
+  body { @apply bg-background font-sans text-foreground antialiased; }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: .5; }
+}
+::selection { background: var(--primary); color: var(--primary-foreground); }
+
+@layer components {
+  /* Pill buttons: white by default, lime on hover (same as the prototype's shadcn Button). */
+  .btn {
+    @apply inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-transparent h-10 px-4 text-sm font-semibold whitespace-nowrap transition-all duration-200 select-none active:scale-[0.97] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50;
+  }
+  .btn-primary { @apply bg-white text-black hover:bg-primary hover:text-primary-foreground hover:shadow-[0_0_24px_-4px_var(--primary)]; }
+  .btn-lime { @apply bg-primary text-primary-foreground hover:bg-white hover:text-black; }
+  .btn-outline { @apply border-white/25 bg-transparent text-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground; }
+  .btn-ghost { @apply bg-transparent text-foreground hover:bg-primary hover:text-primary-foreground; }
+  .btn-danger { @apply border-rose-400/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/25; }
+  .btn-sm { @apply h-8 gap-1.5 px-3 text-[0.82rem]; }
+  .btn-lg { @apply h-12 px-6 text-base; }
+  .btn-xl { @apply h-14 gap-2.5 px-8 text-lg; }
+  .field { @apply w-full rounded-xl border border-input bg-white/5 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-3 focus:ring-ring/30 disabled:opacity-60; }
+}
+
+/* Animations from the prototype */
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(0.5em) scale(0.85) rotate(-4deg); filter: blur(8px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes marquee { to { transform: translateX(-50%); } }
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+  50% { transform: translateY(-12px) rotate(var(--tilt, 0deg)); }
+}
+.animate-pop { animation: pop-in 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.25) both; }
+.animate-marquee { animation: marquee 28s linear infinite; }
+.animate-float { animation: float 5s ease-in-out infinite; }
+/* Visible by default; only elements that start below the fold get data-reveal="waiting" (see Reveal). */
+[data-reveal] { transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1), filter 0.7s ease; }
+[data-reveal="waiting"] { opacity: 0; transform: translateY(40px) scale(0.97) rotate(var(--reveal-tilt, 0deg)); filter: blur(6px); }
+@media (prefers-reduced-motion: reduce) {
+  .animate-pop, .animate-marquee, .animate-float { animation: none; }
+  [data-reveal], [data-reveal="waiting"] { opacity: 1; transform: none; filter: none; transition: none; }
+}
+
+/* Print: light colors, and only the element marked .print-area (door flyer, inspection report) */
 @media print {
+  :root {
+    color-scheme: light;
+    --background: white; --foreground: black; --card: white; --card-foreground: black;
+    --muted: oklch(0.96 0 0); --muted-foreground: oklch(0.45 0 0); --border: oklch(0.85 0 0);
+    --primary: oklch(0.45 0.15 135); --accent: oklch(0.96 0.04 127);
+  }
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
-  .print-area { position: absolute; left: 0; top: 0; width: 100%; background: white; }
+  .print-area { position: absolute; left: 0; top: 0; width: 100%; background: white; color: black; }
   .no-print { display: none !important; }
   @page { margin: 14mm; }
 }

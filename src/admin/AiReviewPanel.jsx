@@ -22,45 +22,45 @@ export function AiItemCard({ result, row, brief, onApply, applying }) {
   const pct = Math.round((result.confidence ?? 0) * 100);
   const applied = row && row.condition_status === result.suggested_status && Number(row.estimated_fine) === Number(result.suggested_fine || 0);
   return (
-    <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3 text-sm" data-testid="ai-item-card">
+    <div className="space-y-2 rounded-xl border border-violet-400/30 bg-violet-400/10 p-3 text-sm" data-testid="ai-item-card">
       <div className="flex flex-wrap items-center gap-2">
-        <Sparkles size={15} className="text-violet-600" />
+        <Sparkles size={15} className="text-violet-400" />
         <b>{result.item_name || 'Nemotron suggestion'}</b>
         <span className="ml-auto"><StatusBadge status={result.suggested_status} /></span>
       </div>
       {(result.error || result.skipped) ? (
-        <p className="flex items-start gap-1.5 text-slate-600"><TriangleAlert size={15} className="mt-0.5 shrink-0 text-amber-600" /> Review manually: {result.error || result.skipped}</p>
+        <p className="flex items-start gap-1.5 text-white/75"><TriangleAlert size={15} className="mt-0.5 shrink-0 text-amber-400" /> Review manually: {result.error || result.skipped}</p>
       ) : (
         <>
           <div className="flex items-center gap-2">
-            <div className="h-2 w-28 overflow-hidden rounded-full bg-slate-200"><div className={`h-full ${pct < 60 ? 'bg-slate-400' : 'bg-violet-500'}`} style={{ width: `${pct}%` }} /></div>
-            <span className="text-xs text-slate-600">{pct}% confident{pct < 60 && ' · needs human review'}</span>
+            <div className="h-2 w-28 overflow-hidden rounded-full bg-white/15"><div className={`h-full ${pct < 60 ? 'bg-white/40' : 'bg-violet-500'}`} style={{ width: `${pct}%` }} /></div>
+            <span className="text-xs text-white/75">{pct}% confident{pct < 60 && ' · needs human review'}</span>
           </div>
           {result.findings?.length > 0 && (
             <ul className="space-y-1">
               {result.findings.map((f, i) => (
                 <li key={i} className="flex flex-wrap items-center gap-1.5">
-                  <span className="rounded bg-white px-1.5 py-0.5 text-xs ring-1 ring-slate-200">{f.severity}</span>
-                  <span className={`rounded px-1.5 py-0.5 text-xs ${f.present_at_move_in ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'}`}>{f.present_at_move_in ? 'at move-in' : 'new'}</span>
-                  <span>{f.description}{f.location && <span className="text-slate-500"> ({f.location})</span>}</span>
+                  <span className="rounded bg-card px-1.5 py-0.5 text-xs ring-1 ring-white/10">{f.severity}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-xs ${f.present_at_move_in ? 'bg-sky-400/15 text-sky-200' : 'bg-rose-400/15 text-rose-200'}`}>{f.present_at_move_in ? 'at move-in' : 'new'}</span>
+                  <span>{f.description}{f.location && <span className="text-muted-foreground"> ({f.location})</span>}</span>
                 </li>
               ))}
             </ul>
           )}
-          {result.rationale && <blockquote className="border-l-2 border-violet-300 pl-2 text-slate-700">“{result.rationale}” <span className="text-xs text-slate-400">: Nemotron</span></blockquote>}
+          {result.rationale && <blockquote className="border-l-2 border-violet-400/30 pl-2 text-white/85">“{result.rationale}” <span className="text-xs text-white/50">: Nemotron</span></blockquote>}
           <p className="font-medium">
-            {result.suggested_fine > 0 && <>Suggested fine <b className="text-rose-700">{money(result.suggested_fine)}</b> <span className="font-normal text-slate-500">(fee schedule, minus nothing from the AI)</span></>}
-            {result.waived_if_pre_existing > 0 && <><b className="text-sky-700">{money(result.waived_if_pre_existing)}</b> waived (pre-existing)</>}
-            {!result.suggested_fine && !result.waived_if_pre_existing && <span className="text-slate-500">No charge suggested</span>}
+            {result.suggested_fine > 0 && <>Suggested fine <b className="text-rose-200">{money(result.suggested_fine)}</b> <span className="font-normal text-muted-foreground">(fee schedule, minus nothing from the AI)</span></>}
+            {result.waived_if_pre_existing > 0 && <><b className="text-sky-200">{money(result.waived_if_pre_existing)}</b> waived (pre-existing)</>}
+            {!result.suggested_fine && !result.waived_if_pre_existing && <span className="text-muted-foreground">No charge suggested</span>}
           </p>
         </>
       )}
-      {brief && <p className="rounded-lg bg-amber-50 p-2 text-amber-900"><b>AI recommendation:</b> {brief}</p>}
+      {brief && <p className="rounded-lg bg-amber-400/10 p-2 text-amber-200"><b>AI recommendation:</b> {brief}</p>}
       {row && (
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          <span className="text-xs text-slate-500">Current:</span><StatusBadge status={row.condition_status} />
-          {applied ? <span className="ml-auto flex items-center gap-1 text-xs text-emerald-700"><Check size={14} /> Applied</span> : (
-            <button disabled={manual || applying} onClick={() => onApply(result)} className="ml-auto rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white">
+          <span className="text-xs text-muted-foreground">Current:</span><StatusBadge status={row.condition_status} />
+          {applied ? <span className="ml-auto flex items-center gap-1 text-xs text-primary"><Check size={14} /> Applied</span> : (
+            <button disabled={manual || applying} onClick={() => onApply(result)} className="btn btn-sm btn-lime ml-auto">
               {applying ? 'Applying…' : 'Apply suggestion'}
             </button>
           )}
@@ -145,31 +145,31 @@ export default function AiReviewPanel({ unit, rows, onApplied }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <button onClick={run} disabled={state === 'running'} className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 font-semibold text-white">
+        <button onClick={run} disabled={state === 'running'} className="btn btn-lime btn-lg">
           {state === 'running' ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />} {state === 'running' ? 'Reviewing…' : data ? 'Run again' : 'Run Nemotron Review'}
         </button>
-        {state === 'idle' && <span className="text-sm text-slate-500">Nemotron plans the review and calls tools. Usually 10–40 s.</span>}
-        {state !== 'running' && savedAt && <span className="text-sm text-slate-500">Last run: {fmtDateTime(savedAt)} · {data?.mode}{data?.elapsed_ms ? ` · ${(data.elapsed_ms / 1000).toFixed(1)} s` : ''}</span>}
+        {state === 'idle' && <span className="text-sm text-muted-foreground">Nemotron plans the review and calls tools. Usually 10–40 s.</span>}
+        {state !== 'running' && savedAt && <span className="text-sm text-muted-foreground">Last run: {fmtDateTime(savedAt)} · {data?.mode}{data?.elapsed_ms ? ` · ${(data.elapsed_ms / 1000).toFixed(1)} s` : ''}</span>}
       </div>
 
       {state === 'running' && (
-        <div className="rounded-xl border border-violet-200 bg-violet-50 p-4" role="status">
-          <p className="mb-2 flex items-center gap-2 font-medium text-violet-900"><Loader2 size={16} className="animate-spin" /> Nemotron agent working… {elapsed}s</p>
-          <ol className="flex flex-wrap gap-2 text-xs text-slate-500">{PLAN.map((p, i) => <li key={p} className="rounded-full bg-white px-2.5 py-1 ring-1 ring-slate-200">{i + 1}. {p}</li>)}</ol>
+        <div className="rounded-xl border border-violet-400/30 bg-violet-400/10 p-4" role="status">
+          <p className="mb-2 flex items-center gap-2 font-medium text-violet-200"><Loader2 size={16} className="animate-spin" /> Nemotron agent working… {elapsed}s</p>
+          <ol className="flex flex-wrap gap-2 text-xs text-muted-foreground">{PLAN.map((p, i) => <li key={p} className="rounded-full bg-card px-2.5 py-1 ring-1 ring-white/10">{i + 1}. {p}</li>)}</ol>
         </div>
       )}
 
       {state === 'error' && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+        <div className="rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200" role="alert">
           <p className="font-semibold">AI review unavailable: manual review still works.</p>
           <p className="mt-1">{error}</p>
-          <button onClick={run} className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 font-medium text-white">Retry</button>
+          <button onClick={run} className="btn btn-sm btn-danger mt-2">Retry</button>
         </div>
       )}
 
       {state === 'done' && data && (
         <>
-          <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-sm ${data.mode === 'agent' ? 'bg-emerald-50 text-emerald-900' : 'bg-slate-100 text-slate-700'}`} data-testid="ai-mode">
+          <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-sm ${data.mode === 'agent' ? 'bg-primary/15 text-primary' : 'bg-white/10 text-white/85'}`} data-testid="ai-mode">
             {data.mode === 'agent' ? <Bot size={18} /> : <Cpu size={18} />}
             <b>{data.mode === 'agent' ? 'Nemotron agent' : 'Pipeline mode'}</b>
             {data.mode === 'agent' && <span>· {data.agent.rounds} rounds · {data.agent.tool_calls} tool calls{data.elapsed_ms ? ` · ${(data.elapsed_ms / 1000).toFixed(1)} s` : ''}</span>}
@@ -179,42 +179,42 @@ export default function AiReviewPanel({ unit, rows, onApplied }) {
           </div>
 
           {data.memo ? (
-            <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <section className="rounded-xl border border-white/10 bg-card p-4">
               <h3 className="mb-2 font-semibold">Summary for housing</h3>
               <ul className="list-disc space-y-1 pl-5 text-sm">{data.memo.admin_summary.map((b, i) => <li key={i}>{b}</li>)}</ul>
               {data.memo.student_note && (
-                <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
+                <div className="mt-3 rounded-lg bg-white/5 p-3 text-sm">
                   <p className="mb-1 flex items-center justify-between font-medium">Note to the student
-                    <button onClick={() => { navigator.clipboard?.writeText(data.memo.student_note); toast('Copied.', 'success'); }} className="flex items-center gap-1 text-xs font-normal text-blue-700"><ClipboardCopy size={13} /> Copy</button>
+                    <button onClick={() => { navigator.clipboard?.writeText(data.memo.student_note); toast('Copied.', 'success'); }} className="flex items-center gap-1 text-xs font-normal text-primary"><ClipboardCopy size={13} /> Copy</button>
                   </p>
-                  <p className="text-slate-700">{data.memo.student_note}</p>
+                  <p className="text-white/85">{data.memo.student_note}</p>
                 </div>
               )}
             </section>
           ) : (
-            <p className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600">Summary unavailable{data.memo_error ? ` (${data.memo_error})` : ''}. The item cards below still work.</p>
+            <p className="rounded-xl bg-white/10 p-3 text-sm text-white/75">Summary unavailable{data.memo_error ? ` (${data.memo_error})` : ''}. The item cards below still work.</p>
           )}
 
           {data.agent.trace.length > 0 && (
-            <section className="rounded-xl border border-slate-200 bg-white p-4" data-testid="ai-timeline">
+            <section className="rounded-xl border border-white/10 bg-card p-4" data-testid="ai-timeline">
               <h3 className="mb-3 font-semibold">Agent timeline</h3>
               <ol className="space-y-3">
                 {rounds.map((round) => {
                   const steps = data.agent.trace.filter((s) => s.round === round);
                   return (
                     <li key={round}>
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {round === 0 ? 'Checked by code (coverage)' : `Round ${round}${steps.length > 1 ? ` · ${steps.length} tools in parallel` : ''}`}
                       </p>
                       <ul className="space-y-1">
                         {steps.map((s, i) => {
                           const Icon = (TOOL_META[s.tool] || TOOL_META.list_items).icon;
                           return (
-                            <li key={i} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm ${s.ok ? 'bg-slate-50' : 'bg-red-50 text-red-800'}`}>
-                              <Icon size={15} className="shrink-0 text-violet-600" />
+                            <li key={i} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm ${s.ok ? 'bg-white/5' : 'bg-red-400/10 text-red-200'}`}>
+                              <Icon size={15} className="shrink-0 text-violet-400" />
                               <code className="text-xs font-semibold">{s.tool}</code>
                               <span className="min-w-0 flex-1 truncate">{s.summary}</span>
-                              <span className="shrink-0 text-xs text-slate-400">{s.ms < 1000 ? `${s.ms} ms` : `${(s.ms / 1000).toFixed(1)} s`}</span>
+                              <span className="shrink-0 text-xs text-white/50">{s.ms < 1000 ? `${s.ms} ms` : `${(s.ms / 1000).toFixed(1)} s`}</span>
                               <span aria-label={s.ok ? 'ok' : 'failed'}>{s.ok ? '✓' : '✗'}</span>
                             </li>
                           );

@@ -167,7 +167,7 @@ export default function CameraCapture({
 
   // ---------- UI ----------
   if (error) {
-    return <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>;
+    return <div className="rounded-xl bg-red-400/10 p-4 text-sm text-red-200">{error}</div>;
   }
 
   if (preview) {
@@ -179,10 +179,10 @@ export default function CameraCapture({
           <video src={preview.url} controls playsInline className="w-full rounded-xl" />
         )}
         <div className="flex gap-3">
-          <button onClick={retake} className="flex-1 rounded-xl border py-3 font-medium">
+          <button onClick={retake} className="btn btn-outline btn-lg flex-1">
             Retake
           </button>
-          <button onClick={confirm} className="flex-1 rounded-xl bg-blue-600 py-3 font-medium text-white">
+          <button onClick={confirm} className="btn btn-lime btn-lg flex-1">
             Use this {preview.kind}
           </button>
         </div>
@@ -208,7 +208,7 @@ export default function CameraCapture({
               key={m}
               disabled={recording}
               onClick={() => setMode(m)}
-              className={`rounded-full px-4 py-1 capitalize ${mode === m ? "bg-gray-900 text-white" : "bg-gray-100"}`}
+              className={`rounded-full px-4 py-1 capitalize ${mode === m ? "bg-primary text-primary-foreground" : "bg-white/10"}`}
             >
               {m}
             </button>
@@ -220,18 +220,18 @@ export default function CameraCapture({
         <button
           disabled={recording}
           onClick={() => setFacing((f) => (f === "environment" ? "user" : "environment"))}
-          className="rounded-full bg-gray-100 px-4 py-2 text-sm"
+          className="btn btn-outline"
         >
           Flip
         </button>
 
         {mode === "photo" ? (
-          <button onClick={takePhoto} aria-label="Take photo" className="h-16 w-16 rounded-full border-4 border-gray-300 bg-white shadow" />
+          <button onClick={takePhoto} aria-label="Take photo" className="h-16 w-16 rounded-full border-4 border-primary bg-white shadow transition-transform active:scale-90" />
         ) : (
           <button
             onClick={recording ? stopRecording : startRecording}
             aria-label={recording ? "Stop recording" : "Start recording"}
-            className={`h-16 w-16 border-4 border-gray-300 shadow ${recording ? "rounded-lg bg-red-600" : "rounded-full bg-red-500"}`}
+            className={`h-16 w-16 border-4 border-white/20 shadow ${recording ? "rounded-lg bg-red-600" : "rounded-full bg-red-500"}`}
           />
         )}
 
