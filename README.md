@@ -27,7 +27,7 @@ In mock mode a **"use a sample photo"** button replaces the camera (real mode ha
 
 ## Run it on real Supabase
 
-1. In Supabase, run `supabase/migrations/001_schema.sql`, `002_policies.sql`, `003_seed.sql` (one query each, in order), create the 5 demo users in Authentication → Users (Auto Confirm), then run `004_demo_roles.sql`.
+1. In Supabase, run `supabase/migrations/001_schema.sql`, `002_policies.sql`, `003_seed.sql` (one query each, in order), create the 5 demo users in Authentication → Users (Auto Confirm), then run `004_demo_roles.sql` and `005_evidence_paths.sql`.
 2. `cp .env.example .env.local` and fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_PUBLIC_SITE_URL`, `VITE_DEMO_PASSWORD`.
 3. Check NVIDIA with one command: `node --no-warnings scripts/verify-nvidia.mjs` (needs `NVIDIA_API_KEY`), then deploy the Nemotron Edge Functions: see [`supabase/functions/README.md`](supabase/functions/README.md).
 4. Optional: `node scripts/hash-seed.mjs` prints SQL that fingerprints the seed photos (green integrity badges). Re-run it if you replace a photo in `public/seed/`.

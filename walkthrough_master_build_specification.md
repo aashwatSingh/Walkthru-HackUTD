@@ -1016,3 +1016,8 @@ Shown in two places: a **unit-level drawer** opened by "Run Nemotron Review" (CO
 - The first real run of `verify-nvidia.mjs` showed key, model, JSON, the photo coach and tool calling all working, and NVIDIA **accepting two photos in one request**. The two-photo answer failed to parse ("malformed JSON"), most likely cut off by the token budget.
 - Fix: `nemotron()` retries cut-off or empty answers once (3x tokens, reasoning off), and `parseModelJson` is more tolerant and shows the model's output in its errors (Section 8.1).
 - Second real run: **all 8 checks pass**, all three challenge criteria ✅ (6 planning rounds, 11 tool calls; blinds = new damage at 95%, door = no change at 100%). One of four comparisons still came back cut off, and the agent's retries replayed the cached failure. Fixed: unreadable answers are re-asked once (reasoning off, 2x budget) and failed comparisons are no longer cached, so the agent's next call retries for real. Recommended secret: `NEMOTRON_ENABLE_THINKING=false` (0.3 s vs 0.9 s per call).
+
+## 21. Security fix after code review (005_evidence_paths.sql)
+- **Hole:** the evidence rule checked who edits a photo and when, but not which file it points to. A student could point their move-out photo at their own move-in photo (identical photos, so Nemotron says "no change").
+- **Fix:** `supabase/migrations/005_evidence_paths.sql` requires every photo path to be `<unit_id>/<item_id>/before-…` (move-in) or `…/after-…` (move-out) for that exact item. Tested: reusing the move-in photo, a seed file, a "before" file at move-out, another item's or another room's photo are all rejected; normal uploads, retakes and locking still work.
+
