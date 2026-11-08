@@ -70,7 +70,7 @@ function HeroTerminal() {
   const rows = [
     { name: 'Main door & lock', code: '[VERIFIED // NO_CHANGE]', cls: 'border-emerald-400/40 bg-emerald-400/10 text-[#00FF9D]' },
     { name: 'Study desk', code: '[PRE_EXISTING // WAIVED]', cls: 'border-cyan-400/45 bg-cyan-400/10 text-neon' },
-    { name: 'Window blinds', code: '[NEW_DAMAGE // BILLABLE]', cls: 'border-rose-500/50 bg-rose-500/10 text-[#FF5C8D]' },
+    { name: 'Hallway door', code: '[NEW_DAMAGE // BILLABLE]', cls: 'border-rose-500/50 bg-rose-500/10 text-[#FF5C8D]' },
     { name: 'Sink & mirror', code: '[DISPUTE // UNDER_REVIEW]', cls: 'border-amber-400/45 bg-amber-400/10 text-[#FFB800]' },
   ];
   return (
@@ -80,7 +80,7 @@ function HeroTerminal() {
         <span className="flex items-center gap-1.5 text-[#00FF9D]"><Lock className="size-3" /> LOCKED</span>
       </div>
       <div className="hud-frame scanlines relative aspect-[16/10] overflow-hidden border-b border-purple-500/20 bg-black">
-        <img src="/seed/blinds-broken.jpg" alt="Move-out photo of the window blinds, one slat bent" className="h-full w-full object-cover opacity-90" />
+        <img src="/seed/blinds-broken.jpg" alt="Move-out photo of a door" className="h-full w-full object-cover opacity-90" />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-[4] flex justify-between gap-2 bg-gradient-to-b from-black/80 to-transparent px-3 pb-5 pt-2 font-mono text-[10px] text-cyan-100/90">
           <span className="min-w-0 truncate">CAM_T1 // UNIT FH-304B // MOVE_OUT</span>
           <span className="flex shrink-0 items-center gap-1.5"><span className="live-dot bg-[#FF2A6D]" aria-hidden /> ARCHIVED</span>
@@ -193,7 +193,7 @@ export default function Landing() {
           <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1.15fr_1fr]">
             <Reveal>
               <div className="hud-frame scanlines relative grid grid-cols-2 gap-px overflow-hidden rounded-md border border-cyan-400/30 bg-black">
-                {[['T0 // MOVE-IN', '/seed/blinds.jpg', 'Move-in photo of the window blinds, intact'], ['T1 // MOVE-OUT', '/seed/blinds-broken.jpg', 'Move-out photo of the window blinds, one slat bent']].map(([label, src, alt]) => (
+                {[['T0 // MOVE-IN', '/seed/blinds.jpg', 'Move-in photo of the window blinds, intact'], ['T1 // MOVE-OUT', '/seed/blinds-broken.jpg', 'Move-out photo of a door']].map(([label, src, alt]) => (
                   <figure key={label} className="relative">
                     <img src={src} alt={alt} className="aspect-[3/4] w-full object-cover" />
                     <figcaption className="absolute left-2 top-2 z-[4] rounded-[2px] border border-cyan-400/30 bg-black/70 px-2 py-0.5 font-mono text-[10px] text-cyan-100">{label}</figcaption>
