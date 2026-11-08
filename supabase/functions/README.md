@@ -13,13 +13,21 @@ Neither function writes `condition_status` or `estimated_fine`; the admin applie
 _shared/cors.ts       CORS headers + json() helper (every response carries CORS headers)
 _shared/nemotron.ts   NVIDIA chat-completions client: temperature 0.1, top_p 0.9, tool calling, 20 s timeout per call
 _shared/agent.ts      tool-calling loop: runs the model's tool calls in parallel, step/time budget, trace for the UI
-_shared/prompts.mjs    the prompts, output checks, and fee rules (also used by scripts/test-nemotron.mjs)
+_shared/prompts.mjs    the prompts, output checks, and fee rules (also used by the scripts)
+_shared/vision.ts      photo comparison + Capture Coach, with an automatic fallback if the model takes one image per request
+_shared/review-tools.ts  the agent's 5 tools (shared with scripts/verify-nvidia.mjs)
 _shared/supabase.ts   sign-in check, service-role client, image loading
 photo-check/index.ts
 ai-review/index.ts
 ```
 
-## 1. Pick the models and try the prompts (no Supabase needed)
+## 0. Verify everything against the real NVIDIA API (one command, no Supabase)
+```bash
+node --no-warnings scripts/verify-nvidia.mjs
+```
+Set `NVIDIA_API_KEY` first (PowerShell: `$env:NVIDIA_API_KEY = "nvapi-..."`). It runs the **same code the Edge Functions run** on the seed photos and prints a checklist: key and model, JSON parsing, one photo, two photos in one request, the full comparison, tool calling, the **full multi-step agent with its timeline**, and whether turning reasoning off is faster. It ends with the exact secrets to set. Needs Node 22.18+. Your key is never printed.
+
+## 1. Pick the models and try the prompts by hand (optional)
 1. Get an API key at build.nvidia.com (`nvapi-...`). Ask the NVIDIA mentors which Nemotron models count for the challenge.
 2. From the repo root:
    ```bash
@@ -46,6 +54,9 @@ Supabase Dashboard → **Edge Functions → Secrets** (or `npx supabase secrets 
 | `NEMOTRON_TEXT_MODEL` | `nvidia/nemotron-3.5-super-vl-120b-a12b` (same model) |
 | `PUBLIC_SITE_URL` | the Vercel URL, e.g. `https://walkthru.vercel.app` (used to load `/seed/` photos) |
 | `AI_REVIEW_CONCURRENCY` | optional; max vision calls at once. `2` if NVIDIA returns 429 rate-limit errors (default `4`) |
+| `NEMOTRON_IMAGES_PER_REQUEST` | optional; `1` if the verify script says your model accepts one image per request (skips the failed two-photo attempt every time; the app also learns this by itself) |
+| `NEMOTRON_ENABLE_THINKING` | optional; `false` turns Nemotron's reasoning off (faster). Leave unset for models that don't accept the switch |
+| `NEMOTRON_TIMEOUT_MS` | optional; per-call timeout, default `20000`. Raise to `60000` if the verify script shows slow calls |
 | `AI_REVIEW_MODE` | optional; `pipeline` skips the agent (e.g. if your text model can't call tools). Default `agent` |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically.
@@ -59,7 +70,7 @@ npx supabase functions deploy ai-review --no-verify-jwt --project-ref <project-r
 ```
 `--no-verify-jwt` is required: each function checks the caller itself (`requireUser` in `_shared/supabase.ts`).
 
-**Dashboard (no CLI or Docker):** Edge Functions → Deploy a new function → Via Editor, once per function. The editor deploys each function on its own, so add the `_shared/` files (`cors.ts`, `nemotron.ts`, `prompts.mjs`, `supabase.ts`, plus `agent.ts` for `ai-review`) as files inside the function and change `'../_shared/` to `'./` in `index.ts`. Then turn **off** JWT verification in the function's settings.
+**Dashboard (no CLI or Docker):** Edge Functions → Deploy a new function → Via Editor, once per function. The editor deploys each function on its own, so add the `_shared/` files (`cors.ts`, `nemotron.ts`, `prompts.mjs`, `supabase.ts`, `vision.ts`, plus `agent.ts` and `review-tools.ts` for `ai-review`) as files inside the function and change `'../_shared/` to `'./` in `index.ts`. Then turn **off** JWT verification in the function's settings.
 
 ## 4. Call them from the app
 ```js
@@ -69,7 +80,7 @@ const { data, error } = await supabase.functions.invoke('photo-check', { body: {
 //    or { skipped: true, reason } for videos
 
 const { data, error } = await supabase.functions.invoke('ai-review', { body: { unitId } });
-// data: { unit_id, unit_code, mode: 'agent' | 'pipeline', models: { vision, text }, elapsed_ms,
+// data: { unit_id, unit_code, mode: 'agent' | 'pipeline', vision_mode: 'multi-image' | 'single-image', models: { vision, text }, elapsed_ms,
 //         items: [{ item_id, item_name, suggested_status, suggested_fine, waived_if_pre_existing,
 //                   confidence, findings, rationale, error?, skipped? }],
 //         memo: { admin_summary, student_note, dispute_briefs } | null, memo_error?,

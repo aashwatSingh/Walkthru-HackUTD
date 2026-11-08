@@ -91,7 +91,7 @@ export default function AiReviewPanel({ unit, rows, onApplied }) {
       if (!report && !items.length) return;
       const res = report?.result || {};
       setData({
-        mode: res.mode || 'pipeline', models: { vision: reviews[rows[0]?.id]?.DAMAGE_DIFF?.model, text: report?.model }, items,
+        mode: res.mode || 'pipeline', vision_mode: res.vision_mode, models: { vision: reviews[rows[0]?.id]?.DAMAGE_DIFF?.model, text: report?.model }, items,
         memo: res.admin_summary ? { admin_summary: res.admin_summary, student_note: res.student_note, dispute_briefs: res.dispute_briefs || [] } : null,
         memo_error: res.memo_error, agent: res.agent || { rounds: 0, tool_calls: 0, trace: [] },
       });
@@ -173,6 +173,7 @@ export default function AiReviewPanel({ unit, rows, onApplied }) {
             {data.mode === 'agent' ? <Bot size={18} /> : <Cpu size={18} />}
             <b>{data.mode === 'agent' ? 'Nemotron agent' : 'Pipeline mode'}</b>
             {data.mode === 'agent' && <span>· {data.agent.rounds} rounds · {data.agent.tool_calls} tool calls{data.elapsed_ms ? ` · ${(data.elapsed_ms / 1000).toFixed(1)} s` : ''}</span>}
+            {data.vision_mode === 'single-image' && <span title="This model accepts one image per request, so each comparison runs as two vision calls.">· 2-step vision</span>}
             {data.mode !== 'agent' && data.agent.fallback_reason && <span title={data.agent.fallback_reason}>· fallback: {String(data.agent.fallback_reason).slice(0, 80)}</span>}
             <span className="ml-auto text-xs opacity-70">{[data.models?.vision, data.models?.text].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' + ')}</span>
           </div>

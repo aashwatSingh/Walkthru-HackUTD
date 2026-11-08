@@ -2,9 +2,9 @@
 // POST { itemId, phase: 'before' | 'after' } → { ok, shows_item, framing_ok, ..., retake_tip }
 // Advisory only: the student flow never waits on or is blocked by this result.
 import { json, preflight } from '../_shared/cors.ts';
-import { nemotron, VLM_MODEL } from '../_shared/nemotron.ts';
-import { normalizePhotoCheck, parseModelJson, photoCheckMessages } from '../_shared/prompts.mjs';
+import { VLM_MODEL } from '../_shared/nemotron.ts';
 import { loadImage, requireUser, serviceClient } from '../_shared/supabase.ts';
+import { checkPhoto } from '../_shared/vision.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return preflight();
@@ -47,8 +47,7 @@ Deno.serve(async (req) => {
     ]);
 
     const model = VLM_MODEL();
-    const answer = await nemotron(model, photoCheckMessages(item, photo, reference), { maxTokens: 1200 });
-    const result = { ...normalizePhotoCheck(parseModelJson(answer), !!reference), media_path: path };
+    const result = { ...(await checkPhoto(model, item, photo, reference)), media_path: path };
 
     const { error: insertError } = await admin.from('ai_reviews').insert({
       item_id: item.id,

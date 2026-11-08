@@ -6,6 +6,16 @@ const NIM_URL = Deno.env.get('NIM_BASE_URL') ?? 'https://integrate.api.nvidia.co
 // Low temperature + top_p for deterministic JSON and tool selection.
 export const SAMPLING = { temperature: 0.1, top_p: 0.9 } as const;
 
+// Per-call timeout (spec: 20 s). Reasoning models can be slower: raise it with the NEMOTRON_TIMEOUT_MS secret.
+export const DEFAULT_TIMEOUT_MS = Number(Deno.env.get('NEMOTRON_TIMEOUT_MS')) || 20_000;
+
+// Nemotron 3.5 can "think" before answering, which adds seconds per call. NEMOTRON_ENABLE_THINKING=false turns
+// that off (sent as chat_template_kwargs.enable_thinking). Unset = don't send anything (works with any model).
+const thinkingFromEnv = (): boolean | undefined => {
+  const v = Deno.env.get('NEMOTRON_ENABLE_THINKING')?.toLowerCase();
+  return v === 'true' ? true : v === 'false' ? false : undefined;
+};
+
 export const VLM_MODEL = () => requireEnv('NEMOTRON_VLM_MODEL');
 export const TEXT_MODEL = () => requireEnv('NEMOTRON_TEXT_MODEL');
 
@@ -40,8 +50,10 @@ export const imagePart = (base64: string, mime = 'image/jpeg'): ContentPart => (
 
 /** Raised for HTTP errors so callers can tell "model doesn't support tools" (4xx) from outages. */
 export class NemotronHttpError extends Error {
-  constructor(public status: number, body: string) {
+  status: number;
+  constructor(status: number, body: string) {
     super(`Nemotron ${status}: ${body.slice(0, 500)}`);
+    this.status = status;
   }
 }
 
@@ -50,7 +62,8 @@ export class NemotronHttpError extends Error {
 export async function chat(
   model: string,
   messages: ReadonlyArray<ChatMessage>,
-  { maxTokens = 1500, timeoutMs = 20_000, tools }: { maxTokens?: number; timeoutMs?: number; tools?: ToolDef[] } = {},
+  { maxTokens = 1500, timeoutMs = DEFAULT_TIMEOUT_MS, tools, thinking = thinkingFromEnv() }:
+    { maxTokens?: number; timeoutMs?: number; tools?: ToolDef[]; thinking?: boolean } = {},
 ): Promise<{ content: string; tool_calls: ToolCall[] }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -68,6 +81,7 @@ export async function chat(
         ...SAMPLING,
         max_tokens: maxTokens,
         stream: false,
+        ...(thinking !== undefined ? { chat_template_kwargs: { enable_thinking: thinking } } : {}),
         ...(tools ? { tools, tool_choice: 'auto' } : {}),
       }),
       signal: controller.signal,
@@ -90,7 +104,7 @@ export async function chat(
 export async function nemotron(
   model: string,
   messages: ReadonlyArray<ChatMessage>,
-  options: { maxTokens?: number; timeoutMs?: number } = {},
+  options: { maxTokens?: number; timeoutMs?: number; thinking?: boolean } = {},
 ): Promise<string> {
   const { content } = await chat(model, messages, options);
   if (!content.trim()) throw new Error('Nemotron returned an empty answer');

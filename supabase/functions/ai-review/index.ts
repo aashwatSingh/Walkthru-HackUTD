@@ -10,40 +10,14 @@
 //   - money comes from the fee schedule in code, never from the model
 //   - if tool calling fails or isn't supported, the fixed pipeline runs instead (mode: 'pipeline')
 // Nothing here writes condition_status or estimated_fine: the admin applies suggestions.
-import { runAgent, type Tool, type TraceStep } from '../_shared/agent.ts';
+import { runAgent, type TraceStep } from '../_shared/agent.ts';
 import { json, preflight } from '../_shared/cors.ts';
 import { nemotron, TEXT_MODEL, VLM_MODEL } from '../_shared/nemotron.ts';
-import {
-  AGENT_SYSTEM,
-  agentTask,
-  applyFees,
-  damageDiffMessages,
-  memoMessages,
-  normalizeDiff,
-  normalizeMemo,
-  parseModelJson,
-} from '../_shared/prompts.mjs';
+import { AGENT_SYSTEM, agentTask, applyFees, memoMessages, normalizeMemo, parseModelJson } from '../_shared/prompts.mjs';
 import { loadImage, requireUser, serviceClient } from '../_shared/supabase.ts';
+import { buildReviewTools, isPhotoPair, type Item, type Review } from '../_shared/review-tools.ts';
+import { compareImages, visionMode } from '../_shared/vision.ts';
 
-type Item = {
-  id: string;
-  step_order: number;
-  zone_category: string;
-  item_name: string;
-  standard_charge: number;
-  before_media_path: string | null;
-  before_media_type: string | null;
-  before_notes: string | null;
-  before_captured_at: string | null;
-  after_media_path: string | null;
-  after_media_type: string | null;
-  after_notes: string | null;
-  after_captured_at: string | null;
-  condition_status: string;
-  estimated_fine: number;
-  dispute_reason: string | null;
-};
-type Review = ReturnType<typeof applyFees>;
 
 const MODE = Deno.env.get('AI_REVIEW_MODE') === 'pipeline' ? 'pipeline' : 'agent';
 // Max vision calls at once. Set the AI_REVIEW_CONCURRENCY secret to 2 if NVIDIA returns 429s.
@@ -51,9 +25,6 @@ const CONCURRENCY = Math.max(1, Number(Deno.env.get('AI_REVIEW_CONCURRENCY') ?? 
 const BUDGET_MS = 100_000; // stays inside the Edge Function wall-clock limit
 
 const message = (err: unknown) => String(err instanceof Error ? err.message : err);
-const isPhotoPair = (i: Item) =>
-  i.before_media_type === 'image' && i.after_media_type === 'image' && !!i.before_media_path && !!i.after_media_path;
-
 function limiter(max: number) {
   let active = 0;
   const waiting: (() => void)[] = [];
@@ -105,7 +76,6 @@ Deno.serve(async (req) => {
     .order('step_order');
   if (itemsError) return json({ error: itemsError.message }, 500);
   const items = rows as Item[];
-  const byId = new Map(items.map((i) => [i.id, i]));
   const disputedIds = items.filter((i) => i.condition_status === 'DISPUTE_UNDER_REVIEW').map((i) => i.id);
 
   let vlm: string, textModel: string;
@@ -126,89 +96,13 @@ Deno.serve(async (req) => {
           loadImage(admin, item.before_media_path!),
           loadImage(admin, item.after_media_path!),
         ]);
-        const answer = await nemotron(vlm, damageDiffMessages(item, before, after));
-        return applyFees(normalizeDiff(parseModelJson(answer)), item.standard_charge);
+        // One call with both photos; two calls automatically if the model accepts one image per request.
+        return applyFees(await compareImages(vlm, item, before, after), item.standard_charge);
       }));
     }
     return comparisons.get(item.id)!;
   };
-  const itemFor = (args: Record<string, unknown>) => {
-    const item = byId.get(String(args.item_id ?? ''));
-    if (!item) throw new Error(`unknown item_id ${args.item_id}`);
-    return item;
-  };
-
-  // ── Tools the agent can call (results are compact JSON: no images, few tokens) ──
-  const tools: Tool[] = [
-    {
-      def: { type: 'function', function: { name: 'list_items', description: 'List the checklist items of this unit with notes, status, and whether photos exist.', parameters: { type: 'object', properties: {} } } },
-      run: () => items.map((i) => ({
-        item_id: i.id, item: i.item_name, zone: i.zone_category, has_photos: isPhotoPair(i),
-        status: i.condition_status, disputed: i.condition_status === 'DISPUTE_UNDER_REVIEW',
-        move_in_note: i.before_notes, move_out_note: i.after_notes,
-      })),
-    },
-    {
-      def: { type: 'function', function: { name: 'compare_photos', description: 'Compare the move-in and move-out photos of one item with the Nemotron vision model. Returns findings and a suggested status.', parameters: { type: 'object', properties: { item_id: { type: 'string' } }, required: ['item_id'] } } },
-      run: async (args) => {
-        const item = itemFor(args);
-        if (!isPhotoPair(item)) throw new Error('this item has no photo pair (video or missing)');
-        const { suggested_fine: _f, waived_if_pre_existing: _w, model_status: _m, ...r } = await compare(item);
-        return { item_id: item.id, ...r };
-      },
-    },
-    {
-      def: { type: 'function', function: { name: 'calculate_fee', description: 'Fee-schedule lookup for one compared item: suggested fine (new damage) or waived amount (pre-existing). Computed by code.', parameters: { type: 'object', properties: { item_id: { type: 'string' } }, required: ['item_id'] } } },
-      run: async (args) => {
-        const item = itemFor(args);
-        if (!isPhotoPair(item)) throw new Error('no photo comparison for this item');
-        const r = await compare(item);
-        return {
-          item_id: item.id, suggested_status: r.suggested_status, standard_charge: item.standard_charge,
-          suggested_fine: r.suggested_fine, waived_if_pre_existing: r.waived_if_pre_existing,
-          rule: 'new damage: standard charge × 0.5 minor, × 1 moderate, × 1.5 severe',
-        };
-      },
-    },
-    {
-      def: { type: 'function', function: { name: 'get_dispute_evidence', description: "A student's dispute for one item: their reason, the current charge, and both timestamps and notes.", parameters: { type: 'object', properties: { item_id: { type: 'string' } }, required: ['item_id'] } } },
-      run: (args) => {
-        const item = itemFor(args);
-        if (!item.dispute_reason) return { item_id: item.id, has_dispute: false };
-        return {
-          item_id: item.id, has_dispute: true, reason: item.dispute_reason, current_fine: item.estimated_fine,
-          move_in: { note: item.before_notes, captured_at: item.before_captured_at },
-          move_out: { note: item.after_notes, captured_at: item.after_captured_at },
-        };
-      },
-    },
-    {
-      def: { type: 'function', function: { name: 'submit_review', description: 'Finish: submit the admin summary, the note to the student, and one brief per disputed item.', parameters: {
-        type: 'object',
-        properties: {
-          admin_summary: { type: 'array', items: { type: 'string' }, description: 'at most 3 short bullets' },
-          student_note: { type: 'string', description: 'plain language, 4 sentences max' },
-          dispute_briefs: { type: 'array', items: { type: 'object', properties: { item_id: { type: 'string' }, brief: { type: 'string' } }, required: ['item_id', 'brief'] } },
-        },
-        required: ['admin_summary', 'student_note', 'dispute_briefs'],
-      } } },
-      run: () => ({ accepted: true }), // handled by runAgent as the final tool
-    },
-  ];
-
-  const name = (args: Record<string, unknown>) => byId.get(String(args.item_id))?.item_name ?? String(args.item_id);
-  const summarize = (tool: string, args: Record<string, unknown>, result: unknown): string => {
-    const r = result as Record<string, unknown>;
-    if (tool === 'list_items') return `${(result as unknown[]).length} items loaded`;
-    if (tool === 'compare_photos') return `${name(args)}: ${r.suggested_status} (${Math.round(Number(r.confidence) * 100)}% confident)`;
-    if (tool === 'calculate_fee') {
-      return Number(r.suggested_fine) > 0 ? `${name(args)}: $${Number(r.suggested_fine).toFixed(2)} suggested`
-        : Number(r.waived_if_pre_existing) > 0 ? `${name(args)}: $${Number(r.waived_if_pre_existing).toFixed(2)} waived` : `${name(args)}: $0`;
-    }
-    if (tool === 'get_dispute_evidence') return r.has_dispute ? `${name(args)}: dispute evidence loaded` : `${name(args)}: no dispute`;
-    if (tool === 'submit_review') return 'review submitted';
-    return tool;
-  };
+  const { tools, summarize } = buildReviewTools(items, compare);
 
   // ── 1. Agent (default) ──
   let agent: { final: Record<string, unknown> | null; trace: TraceStep[]; rounds: number } | null = null;
@@ -266,6 +160,7 @@ Deno.serve(async (req) => {
 
   const mode = agent?.final ? 'agent' : 'pipeline';
   const agentInfo = {
+    vision_mode: visionMode(),
     rounds: agent?.rounds ?? 0,
     tool_calls: trace.filter((s) => s.round > 0).length,
     trace,
@@ -278,12 +173,12 @@ Deno.serve(async (req) => {
   );
   if (reviewsError) console.error('ai_reviews insert failed', reviewsError.message);
   const { error: reportError } = await admin.from('ai_unit_reports').insert({
-    unit_id: unit.id, model: textModel, result: { ...(memo ?? {}), memo_error: memoError, mode, agent: agentInfo },
+    unit_id: unit.id, model: textModel, result: { ...(memo ?? {}), memo_error: memoError, mode, vision_mode: visionMode(), agent: agentInfo },
   });
   if (reportError) console.error('ai_unit_reports insert failed', reportError.message);
 
   return json({
-    unit_id: unit.id, unit_code: unit.unit_code, mode, models: { vision: vlm, text: textModel },
+    unit_id: unit.id, unit_code: unit.unit_code, mode, vision_mode: visionMode(), models: { vision: vlm, text: textModel },
     items: results, memo, memo_error: memoError, agent: agentInfo, elapsed_ms: Date.now() - startedAt,
   });
 });

@@ -1,4 +1,4 @@
-# 🛠️ Walkthrough — Master Build Specification (v2.6)
+# 🛠️ Walkthrough — Master Build Specification (v2.7)
 
 > **HackUTD · Target: NVIDIA challenge — "Use Nemotron beyond a chatbot"**
 > Repo: [`Walkthru-HackUTD`](https://github.com/aashwatSingh/Walkthru-HackUTD) · Stack: React (Vite) + Supabase (Postgres, Auth, Storage, Edge Functions) + NVIDIA Nemotron · Deploy: Vercel
@@ -635,7 +635,7 @@ PUBLIC_SITE_URL=https://walkthru.vercel.app       # so functions can fetch /seed
 
 **Deploying the Edge Functions (P1, no Docker needed):**
 - **Easiest: deploy in the browser.** Supabase Dashboard → **Edge Functions → Deploy a new function → Via Editor**. Name it exactly `photo-check` (then repeat for `ai-review`), paste the code from `supabase/functions/<name>/`, and click Deploy. No local Docker or Supabase CLI needed. The repo stays the source of truth, so re-paste after every change.
-  - The editor deploys each function on its own, so `../_shared/` imports won't resolve. Add the `_shared/` files (`cors.ts`, `nemotron.ts`, `prompts.mjs`, `supabase.ts`, and for `ai-review` also `agent.ts`) as files inside each function and change `'../_shared/` to `'./` in the imports.
+  - The editor deploys each function on its own, so `../_shared/` imports won't resolve. Add the `_shared/` files (`cors.ts`, `nemotron.ts`, `prompts.mjs`, `supabase.ts`, `vision.ts`, and for `ai-review` also `agent.ts` and `review-tools.ts`) as files inside each function and change `'../_shared/` to `'./` in the imports.
   - Then turn **off** JWT verification in each function's settings (the toggle may read "Verify JWT with legacy secret"). This matches the CLI flag below.
 - **If you deploy with the CLI instead:**
   ```bash
@@ -804,6 +804,10 @@ export function parseModelJson(answer) {
 ```
 Every parsed answer is then **normalized** (`normalizePhotoCheck`, `normalizeDiff`, `normalizeMemo`): unknown statuses become `NEEDS_HUMAN_REVIEW`, confidence is clamped to 0–1, briefs for non-disputed items are dropped. A bad answer can make one item "review manually"; it can never crash the run.
 
+**Model quirks handled automatically**
+- **One image per request?** The Nemotron 3.5 Super VL model card hints at one image per request. `compareImages()` (`_shared/vision.ts`) first sends both photos in one call; if NVIDIA rejects that (HTTP 400/413/415/422) it remembers and switches to two calls: describe the move-in photo, then judge the move-out photo against that description. The Capture Coach drops its move-in reference photo in that mode. `vision_mode` in the response (`multi-image` or `single-image`) and a "2-step vision" tag in the panel show which one ran.
+- **Reasoning on/off:** secret `NEMOTRON_ENABLE_THINKING=false` sends `chat_template_kwargs.enable_thinking: false` (faster). Unset sends nothing, so other models still work. `NEMOTRON_TIMEOUT_MS` raises the 20 s per-call limit.
+
 **Minimal token overhead**
 - Photos are ~80–150 KB (Sections 4.5, 6) and go **only to the vision model**. The planning model never receives an image; it sees compact JSON tool results (capped at 3,000 characters each).
 - `max_tokens`: 1,000 per agent round, 1,200 for photo checks, 1,500 for comparisons.
@@ -884,7 +888,7 @@ Shown in two places: a **unit-level drawer** opened by "Run Nemotron Review" (CO
 - Run `ai-review` on FH-304B and BB-118 **before judging**. Results persist, so the demo never waits on a cold API call; rerun live once to show the timeline.
 - Every Nemotron call has a 20 s timeout. A failed, timed-out, or video item becomes `NEEDS_HUMAN_REVIEW` and the rest of the run continues.
 - Any `ai-review` error → the panel shows "AI review unavailable — manual review still works". Never block the human flow.
-- Tested end to end against mocks of Supabase and the NVIDIA API: agent mode, agent skipping items, a model without tool support, and pipeline mode. Not yet run against the real NVIDIA API. Hour 0: `models`, `tools`, `diff` in `scripts/test-nemotron.mjs`.
+- Tested end to end against mocks of Supabase and the NVIDIA API: agent mode, agent skipping items, a model without tool support, and pipeline mode. Not yet run against the real NVIDIA API. **Hour 0: run `node --no-warnings scripts/verify-nvidia.mjs`** (needs `NVIDIA_API_KEY`). One command runs the same code as the Edge Functions on the seed photos: key and model, JSON parsing, one and two photos, the full multi-step agent with its timeline, and whether reasoning-off is faster, then prints the secrets to set.
 
 ---
 
@@ -990,3 +994,8 @@ Shown in two places: a **unit-level drawer** opened by "Run Nemotron Review" (CO
 - **Mock mode:** with no `.env.local` the whole app runs offline on seeded data, enforcing the same rules as the database triggers.
 - **Ready-to-paste SQL** lives in `supabase/migrations/` (001 to 004).
 - Seed photos in `public/seed/` are drawn placeholders: replace them with real photos.
+
+## 19. Changes in v2.7 (NVIDIA hardening)
+- **`scripts/verify-nvidia.mjs`:** one command that checks the whole NVIDIA part against the real API, including the full agent loop with the live tool definitions (`_shared/review-tools.ts`), and prints a pass/warn/fail checklist plus the exact secrets to set (Section 8.5).
+- **One-image-per-request fallback** (`_shared/vision.ts`): automatic two-step comparison if the model rejects two photos (Section 8.1).
+- **Optional speed/robustness switches:** `NEMOTRON_ENABLE_THINKING`, `NEMOTRON_IMAGES_PER_REQUEST`, `NEMOTRON_TIMEOUT_MS`.

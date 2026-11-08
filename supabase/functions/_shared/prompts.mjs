@@ -59,6 +59,15 @@ export function normalizePhotoCheck(raw, hasReference) {
 }
 
 // ───────────── 2. Damage Diff ─────────────
+const DIFF_SCHEMA =
+  'Return exactly this JSON and nothing else:\n' +
+  '{"change_detected": boolean, ' +
+  '"findings": [{"description": string, "location": string, "present_at_move_in": boolean, ' +
+  '"severity": "minor" | "moderate" | "severe"}], ' +
+  '"suggested_status": "NO_CHANGE" | "PRE_EXISTING_DAMAGE" | "NEW_DAMAGE_BILLABLE" | "NEEDS_HUMAN_REVIEW", ' +
+  '"confidence": number between 0 and 1, ' +
+  '"rationale": "max 2 sentences; cite the move-in photo/note and timestamp when relevant"}';
+
 /**
  * @param {{ item_name: string, before_notes?: string | null, after_notes?: string | null,
  *           before_captured_at?: string | null, after_captured_at?: string | null }} item
@@ -84,13 +93,56 @@ export function damageDiffMessages(item, beforePhoto, afterPhoto) {
         text(
           `Item: "${item.item_name}". Student move-in note: "${item.before_notes ?? ''}". ` +
             `Student move-out note: "${item.after_notes ?? ''}".\n` +
+            DIFF_SCHEMA,
+        ),
+      ],
+    },
+  ];
+}
+
+// Fallback for models that accept only ONE image per request: describe the move-in photo first,
+// then judge the move-out photo against that description (two calls instead of one).
+/** @returns {Message[]} */
+export function describePhotoMessages(item, photo, label) {
+  return [
+    { role: 'system', content: 'You are a careful housing damage inspector. Describe only what is visible. Reply with JSON only.' },
+    {
+      role: 'user',
+      content: [
+        text(`This is the ${label} photo of: "${item.item_name}".`),
+        photo,
+        text(
+          'List every scratch, crack, stain, break, dent or missing part you can see, and the overall condition. ' +
             'Return exactly this JSON and nothing else:\n' +
-            '{"change_detected": boolean, ' +
-            '"findings": [{"description": string, "location": string, "present_at_move_in": boolean, ' +
-            '"severity": "minor" | "moderate" | "severe"}], ' +
-            '"suggested_status": "NO_CHANGE" | "PRE_EXISTING_DAMAGE" | "NEW_DAMAGE_BILLABLE" | "NEEDS_HUMAN_REVIEW", ' +
-            '"confidence": number between 0 and 1, ' +
-            '"rationale": "max 2 sentences; cite the move-in photo/note and timestamp when relevant"}',
+            '{"condition": "one sentence", "visible_damage": [{"description": string, "location": string}]}',
+        ),
+      ],
+    },
+  ];
+}
+
+/** @returns {Message[]} */
+export function diffAgainstDescriptionMessages(item, afterPhoto, beforeDescription) {
+  return [
+    {
+      role: 'system',
+      content:
+        'You are a careful housing damage inspector. Compare only the named item. Ignore differences in lighting, ' +
+        'camera angle, clutter, and image quality. Never invent damage you cannot see. Reply with JSON only.',
+    },
+    {
+      role: 'user',
+      content: [
+        text(
+          `MOVE-IN photo (captured ${when(item.before_captured_at)}), described earlier from the image: ${JSON.stringify(beforeDescription)}\n` +
+            `Below is the MOVE-OUT photo (captured ${when(item.after_captured_at)}).`,
+        ),
+        afterPhoto,
+        text(
+          `Item: "${item.item_name}". Student move-in note: "${item.before_notes ?? ''}". ` +
+            `Student move-out note: "${item.after_notes ?? ''}".\n` +
+            'Damage listed in the move-in description counts as present at move-in.\n' +
+            DIFF_SCHEMA,
         ),
       ],
     },
