@@ -1,4 +1,4 @@
-# 🛠️ Walkthrough — Master Build Specification (v2.5)
+# 🛠️ Walkthrough — Master Build Specification (v2.6)
 
 > **HackUTD · Target: NVIDIA challenge — "Use Nemotron beyond a chatbot"**
 > Repo: [`Walkthru-HackUTD`](https://github.com/aashwatSingh/Walkthru-HackUTD) · Stack: React (Vite) + Supabase (Postgres, Auth, Storage, Edge Functions) + NVIDIA Nemotron · Deploy: Vercel
@@ -984,3 +984,9 @@ Shown in two places: a **unit-level drawer** opened by "Run Nemotron Review" (CO
 ## 17. Changes in v2.5
 - **Smaller photos, required:** student uploads are resized to 1024 px at JPEG quality 0.75 (~80–150 KB), and seed photos must be under 150 KB. Testing with Nemotron 3.5 Super VL showed that full-size phone photos (~6 MB) are rejected with HTTP 415 (Sections 4.5, 6, 8.1).
 - **Model chosen:** `nvidia/nemotron-3.5-super-vl-120b-a12b` for both `NEMOTRON_VLM_MODEL` and `NEMOTRON_TEXT_MODEL`. Confirmed with a real API key: it supports tool calling, so `ai-review` runs in agent mode.
+
+## 18. Changes in v2.6 (the app exists)
+- **The React app is built** (`src/`, run with `npm install && npm run dev`): login + 2FA gate, role guards, demo switcher, student wizard with live camera and Nemotron photo coach, locking, read-only summary, disputes, admin dashboard (KPIs, charts, filterable table, side-by-side comparator with slider and integrity badges, `AiReviewPanel` with the agent timeline), QR generator with printable door flyer, and the printable report. See `README.md`.
+- **Mock mode:** with no `.env.local` the whole app runs offline on seeded data, enforcing the same rules as the database triggers.
+- **Ready-to-paste SQL** lives in `supabase/migrations/` (001 to 004).
+- Seed photos in `public/seed/` are drawn placeholders: replace them with real photos.

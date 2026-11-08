@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+:root { color-scheme: light; }
+html, body, #root { min-height: 100%; }
+body { background: #f8fafc; color: #0f172a; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+
+/* Print only the element marked .print-area (door flyer, inspection report) */
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; left: 0; top: 0; width: 100%; background: white; }
+  .no-print { display: none !important; }
+  @page { margin: 14mm; }
+}
