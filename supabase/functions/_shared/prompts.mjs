@@ -243,8 +243,36 @@ export const agentTask = (unit) =>
   `Review unit ${unit.unit_code} (${unit.building_name} ${unit.room_number}). Start with list_items.`;
 
 // ───────────── Parsing ─────────────
-// Nemotron reasoning models emit <think>…</think> (which can contain braces), and models sometimes
-// add code fences or chatter around the JSON. Strip all of that first; always fail with a clean error.
+// Nemotron reasoning models emit <think>…</think> (which can contain braces), and models sometimes add code
+// fences, chatter, a trailing comma or a // comment. Strip/repair all of that; if it still fails, the error
+// carries a snippet of what the model actually said, so the logs explain themselves.
+const snippet = (s) => {
+  const flat = String(s).replace(/\s+/g, ' ').trim();
+  return flat.length > 140 ? `${flat.slice(0, 140)}…` : flat;
+};
+
+// The first complete top-level {...} object, ignoring braces inside strings; null if it never closes (cut off).
+function firstBalancedObject(s, start) {
+  let depth = 0, inString = false, escaped = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === '"') inString = false;
+    } else if (c === '"') inString = true;
+    else if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) return s.slice(start, i + 1);
+  }
+  return null;
+}
+
+const repairJson = (s) =>
+  s
+    .replace(/(^|[\s,[{])\/\/[^\n]*/g, '$1') // // line comments (not the // inside "http://…")
+    .replace(/\/\*[\s\S]*?\*\//g, '') // /* block comments */
+    .replace(/,\s*([}\]])/g, '$1'); // trailing commas
+
 export function parseModelJson(answer) {
   const cleaned = String(answer ?? '')
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
@@ -252,11 +280,22 @@ export function parseModelJson(answer) {
     .replace(/```(?:json)?/gi, '')
     .trim();
   const start = cleaned.indexOf('{');
+  if (start < 0) throw new Error(`Model did not return JSON: ${snippet(cleaned) || '(empty answer)'}`);
+
+  const balanced = firstBalancedObject(cleaned, start);
   const end = cleaned.lastIndexOf('}');
-  if (start < 0 || end <= start) throw new Error('Model did not return JSON');
-  try {
-    return JSON.parse(cleaned.slice(start, end + 1));
-  } catch {
-    throw new Error('Model returned malformed JSON');
+  const candidates = [balanced, end > start ? cleaned.slice(start, end + 1) : null].filter(Boolean);
+  for (const text of [...new Set(candidates)]) {
+    for (const attempt of [text, repairJson(text)]) {
+      try {
+        const value = JSON.parse(attempt);
+        if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+      } catch { /* try the next form */ }
+    }
   }
+  throw new Error(
+    balanced
+      ? `Model returned malformed JSON: ${snippet(cleaned.slice(start))}`
+      : `Model output was cut off before the JSON ended: ${snippet(cleaned.slice(start))}`,
+  );
 }

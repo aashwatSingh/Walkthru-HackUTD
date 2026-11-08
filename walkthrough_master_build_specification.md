@@ -1,4 +1,4 @@
-# 🛠️ Walkthrough — Master Build Specification (v2.7)
+# 🛠️ Walkthrough — Master Build Specification (v2.8)
 
 > **HackUTD · Target: NVIDIA challenge — "Use Nemotron beyond a chatbot"**
 > Repo: [`Walkthru-HackUTD`](https://github.com/aashwatSingh/Walkthru-HackUTD) · Stack: React (Vite) + Supabase (Postgres, Auth, Storage, Edge Functions) + NVIDIA Nemotron · Deploy: Vercel
@@ -785,7 +785,7 @@ export const SAMPLING = { temperature: 0.1, top_p: 0.9 } as const;
 ```
 **Zero JSON-parse crashes:** Nemotron reasoning models can emit `<think>…</think>` blocks that contain braces, and models sometimes add code fences or chatter. Everything goes through one parser that strips those first and **always fails with a clean, catchable error**:
 ```js
-// _shared/prompts.mjs
+// _shared/prompts.mjs (helpers firstBalancedObject / repairJson / snippet are in the same file)
 export function parseModelJson(answer) {
   const cleaned = String(answer ?? '')
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
@@ -793,18 +793,30 @@ export function parseModelJson(answer) {
     .replace(/```(?:json)?/gi, '')
     .trim();
   const start = cleaned.indexOf('{');
+  if (start < 0) throw new Error(`Model did not return JSON: ${snippet(cleaned) || '(empty answer)'}`);
+
+  const balanced = firstBalancedObject(cleaned, start);
   const end = cleaned.lastIndexOf('}');
-  if (start < 0 || end <= start) throw new Error('Model did not return JSON');
-  try {
-    return JSON.parse(cleaned.slice(start, end + 1));
-  } catch {
-    throw new Error('Model returned malformed JSON');
+  const candidates = [balanced, end > start ? cleaned.slice(start, end + 1) : null].filter(Boolean);
+  for (const text of [...new Set(candidates)]) {
+    for (const attempt of [text, repairJson(text)]) {
+      try {
+        const value = JSON.parse(attempt);
+        if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+      } catch { /* try the next form */ }
+    }
   }
+  throw new Error(
+    balanced
+      ? `Model returned malformed JSON: ${snippet(cleaned.slice(start))}`
+      : `Model output was cut off before the JSON ended: ${snippet(cleaned.slice(start))}`,
+  );
 }
 ```
 Every parsed answer is then **normalized** (`normalizePhotoCheck`, `normalizeDiff`, `normalizeMemo`): unknown statuses become `NEEDS_HUMAN_REVIEW`, confidence is clamped to 0–1, briefs for non-disputed items are dropped. A bad answer can make one item "review manually"; it can never crash the run.
 
 **Model quirks handled automatically**
+- **Cut-off answers:** a reasoning model can spend its token budget thinking, so the JSON arrives cut off (`finish_reason: "length"`) or empty. `nemotron()` retries once with 3x the budget and reasoning off. The JSON reader also repairs trailing commas and `//` comments, takes the first complete object, and its errors quote what the model said (`malformed JSON: {…}` / `cut off before the JSON ended: {…}`).
 - **One image per request?** The Nemotron 3.5 Super VL model card hints at one image per request. `compareImages()` (`_shared/vision.ts`) first sends both photos in one call; if NVIDIA rejects that (HTTP 400/413/415/422) it remembers and switches to two calls: describe the move-in photo, then judge the move-out photo against that description. The Capture Coach drops its move-in reference photo in that mode. `vision_mode` in the response (`multi-image` or `single-image`) and a "2-step vision" tag in the panel show which one ran.
 - **Reasoning on/off:** secret `NEMOTRON_ENABLE_THINKING=false` sends `chat_template_kwargs.enable_thinking: false` (faster). Unset sends nothing, so other models still work. `NEMOTRON_TIMEOUT_MS` raises the 20 s per-call limit.
 
@@ -999,3 +1011,7 @@ Shown in two places: a **unit-level drawer** opened by "Run Nemotron Review" (CO
 - **`scripts/verify-nvidia.mjs`:** one command that checks the whole NVIDIA part against the real API, including the full agent loop with the live tool definitions (`_shared/review-tools.ts`), and prints a pass/warn/fail checklist plus the exact secrets to set (Section 8.5).
 - **One-image-per-request fallback** (`_shared/vision.ts`): automatic two-step comparison if the model rejects two photos (Section 8.1).
 - **Optional speed/robustness switches:** `NEMOTRON_ENABLE_THINKING`, `NEMOTRON_IMAGES_PER_REQUEST`, `NEMOTRON_TIMEOUT_MS`.
+
+## 20. Changes in v2.8 (first real NVIDIA run)
+- The first real run of `verify-nvidia.mjs` showed key, model, JSON, the photo coach and tool calling all working, and NVIDIA **accepting two photos in one request**. The two-photo answer failed to parse ("malformed JSON"), most likely cut off by the token budget.
+- Fix: `nemotron()` retries cut-off or empty answers once (3x tokens, reasoning off), and `parseModelJson` is more tolerant and shows the model's output in its errors (Section 8.1).

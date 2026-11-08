@@ -64,7 +64,7 @@ export async function chat(
   messages: ReadonlyArray<ChatMessage>,
   { maxTokens = 1500, timeoutMs = DEFAULT_TIMEOUT_MS, tools, thinking = thinkingFromEnv() }:
     { maxTokens?: number; timeoutMs?: number; tools?: ToolDef[]; thinking?: boolean } = {},
-): Promise<{ content: string; tool_calls: ToolCall[] }> {
+): Promise<{ content: string; tool_calls: ToolCall[]; finish_reason: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -87,10 +87,12 @@ export async function chat(
       signal: controller.signal,
     });
     if (!res.ok) throw new NemotronHttpError(res.status, await res.text());
-    const message = (await res.json())?.choices?.[0]?.message ?? {};
+    const choice = (await res.json())?.choices?.[0] ?? {};
+    const message = choice.message ?? {};
     return {
       content: typeof message.content === 'string' ? message.content : '',
       tool_calls: Array.isArray(message.tool_calls) ? message.tool_calls : [],
+      finish_reason: String(choice.finish_reason ?? ''),
     };
   } catch (err) {
     if (controller.signal.aborted) throw new Error(`Nemotron timed out after ${timeoutMs / 1000} s`);
@@ -101,12 +103,25 @@ export async function chat(
 }
 
 // Plain completion that must return text (vision checks, fallback memo).
+// A reasoning model can spend its whole token budget thinking, so the answer arrives CUT OFF (finish_reason
+// "length") or empty. Retry once with 3x the budget and reasoning off, instead of failing on half a JSON.
 export async function nemotron(
   model: string,
   messages: ReadonlyArray<ChatMessage>,
   options: { maxTokens?: number; timeoutMs?: number; thinking?: boolean } = {},
 ): Promise<string> {
-  const { content } = await chat(model, messages, options);
-  if (!content.trim()) throw new Error('Nemotron returned an empty answer');
-  return content;
+  const first = await chat(model, messages, options);
+  if (first.finish_reason !== 'length' && first.content.trim()) return first.content;
+
+  const maxTokens = Math.min((options.maxTokens ?? 1500) * 3, 6000);
+  let second;
+  try {
+    second = await chat(model, messages, { ...options, maxTokens, thinking: false });
+  } catch (err) {
+    // A model that rejects the reasoning switch (HTTP 400): retry with just the bigger budget.
+    if (!(err instanceof NemotronHttpError) || err.status !== 400) throw err;
+    second = await chat(model, messages, { ...options, maxTokens });
+  }
+  if (!second.content.trim()) throw new Error('Nemotron returned an empty answer');
+  return second.content;
 }
