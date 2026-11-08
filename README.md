@@ -28,15 +28,35 @@ In mock mode a **"use a sample photo"** button replaces the camera (real mode ha
 ## Run it on real Supabase
 
 1. In Supabase, run `supabase/migrations/001_schema.sql`, `002_policies.sql`, `003_seed.sql` (one query each, in order), create the 5 demo users in Authentication → Users (Auto Confirm), then run `004_demo_roles.sql` and `005_evidence_paths.sql`.
-2. `cp .env.example .env.local` and fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_PUBLIC_SITE_URL`, `VITE_DEMO_PASSWORD`.
+2. `cp .env.example .env.local` and fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_DEMO_PASSWORD`. Leave `VITE_PUBLIC_SITE_URL` empty unless you print QR codes from your laptop (then: your deployed link, never localhost).
 3. Check NVIDIA with one command: `node --no-warnings scripts/verify-nvidia.mjs` (needs `NVIDIA_API_KEY`), then deploy the Nemotron Edge Functions: see [`supabase/functions/README.md`](supabase/functions/README.md).
 4. Optional: `node scripts/hash-seed.mjs` prints SQL that fingerprints the seed photos (green integrity badges). Re-run it if you replace a photo in `public/seed/`.
 
 The seed photos in `public/seed/` are drawn placeholders. **Replace them with real photos of a room** (under 150 KB, 1024 px wide) so Nemotron has something real to look at.
 
-## Deploy
+## Deploy (this is what gives you a link that works on a phone)
 
-Vercel: import the repo, add the four `VITE_` variables, deploy. `vercel.json` makes QR links like `/inspect/FH-210A` work. Phones need HTTPS (Vercel provides it).
+1. vercel.com → **Add New → Project** → import this repo. Vercel detects Vite; keep its build settings.
+2. Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_DEMO_PASSWORD`. Leave `VITE_PUBLIC_SITE_URL` out: QR codes then use the deployed address automatically.
+3. Deploy, then open the short **Production** link (Project → Domains, like `https://your-project.vercel.app`).
+4. Tell the Edge Functions where the sample photos live: `npx supabase secrets set PUBLIC_SITE_URL=https://your-project.vercel.app --project-ref <ref>`.
+
+If it won't open on a phone:
+- `localhost` links only work on the laptop running `npm run dev`, and phones only open the camera on `https://` sites.
+- A Vercel login page means you opened a per-deployment link: use the Production link above, or turn off Project → Settings → Deployment Protection.
+- Scanned codes landing on someone else's site: an old `VITE_PUBLIC_SITE_URL` (for example `walkthru.vercel.app`, which is NOT this project). The QR page warns when codes point somewhere a phone can't reach.
+
+`vercel.json` makes links like `/inspect/FH-210A` work.
+
+## Tests
+
+| Command | What it checks | Needs |
+|---|---|---|
+| `npm test` | Nemotron client: one retry, shared time limit, agent loop (fake NVIDIA) | Node 22.18+ |
+| `npm run test:e2e` | 57 browser checks: student wizard, 2FA, admin dashboard, comparator, Nemotron panel, disputes, QR codes that scan (also printed), report, admin password | first time: `npx playwright install chromium` |
+| `npm run test:functions` | the real `ai-review` and `photo-check` code under Deno against a fake Supabase + NVIDIA (22 checks) | Deno (fetched by npx if missing); port 8000 free |
+
+No accounts or keys: every suite runs in mock mode or against local fakes.
 
 ## Where things are
 
@@ -50,4 +70,5 @@ src/admin/               dashboard, comparator, AiReviewPanel, QR generator
 src/report/              printable inspection report
 supabase/migrations/     SQL (tables, security rules, seed data)
 supabase/functions/      Nemotron Edge Functions (photo-check, ai-review)
+tests/                   unit, browser (Playwright) and Edge Function tests
 ```

@@ -36,9 +36,10 @@ export async function runAgent(opts: {
   summarize: (tool: string, args: Record<string, unknown>, result: unknown) => string;
   maxRounds?: number;
   deadline: number; // epoch ms; no new round starts if it can't finish in time
+  callDeadline?: number; // epoch ms; every model call (planning included) ends by then, even mid-round
   roundTimeoutMs?: number;
 }): Promise<{ final: Record<string, unknown> | null; trace: TraceStep[]; rounds: number }> {
-  const { model, tools, finalTool, summarize, maxRounds = 6, deadline, roundTimeoutMs = 20_000 } = opts;
+  const { model, tools, finalTool, summarize, maxRounds = 6, deadline, callDeadline, roundTimeoutMs = 20_000 } = opts;
   const byName = new Map(tools.map((t) => [t.def.function.name, t]));
   const defs = tools.map((t) => t.def);
   const messages: ChatMessage[] = [
@@ -52,7 +53,7 @@ export async function runAgent(opts: {
     // A round = one model call (≤ roundTimeoutMs) + its tools (vision calls ≤ 20 s). Stop early, not late.
     if (Date.now() + 2 * roundTimeoutMs > deadline) break;
 
-    const reply = await chat(model, messages, { tools: defs, maxTokens: 1000, timeoutMs: roundTimeoutMs });
+    const reply = await chat(model, messages, { tools: defs, maxTokens: 1000, timeoutMs: roundTimeoutMs, deadline: callDeadline });
 
     if (reply.tool_calls.length === 0) {
       if (nudged) break;

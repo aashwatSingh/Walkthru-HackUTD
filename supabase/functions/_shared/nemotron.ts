@@ -57,16 +57,37 @@ export class NemotronHttpError extends Error {
   }
 }
 
-// One chat completion. Every call gets its own AbortController timeout (default 20 s),
-// so one slow model response can't hang a whole function run.
+// A call needs at least this long to be worth starting.
+export const MIN_CALL_MS = 3_000;
+
+/** Raised instead of starting a call that can't finish before the shared deadline. */
+export class OutOfTimeError extends Error {
+  constructor() {
+    super('Out of time: skipped this Nemotron call so the review finishes before the time limit');
+  }
+}
+
+// Time a call may take: its own timeout, cut down to what is left before the shared deadline (epoch ms).
+// Throws OutOfTimeError when too little is left to be worth starting. Also used before slow non-model work.
+export function callBudget(timeoutMs: number, deadline?: number): number {
+  const budget = deadline === undefined ? timeoutMs : Math.min(timeoutMs, deadline - Date.now());
+  if (budget < MIN_CALL_MS) throw new OutOfTimeError();
+  return budget;
+}
+
+export type CallOptions = { maxTokens?: number; timeoutMs?: number; thinking?: boolean; deadline?: number };
+
+// One chat completion. Every call gets its own AbortController timeout (default 20 s), cut down to the time left
+// before `deadline`, so neither a slow answer nor a retry can push a function past its wall-clock limit.
 export async function chat(
   model: string,
   messages: ReadonlyArray<ChatMessage>,
-  { maxTokens = 1500, timeoutMs = DEFAULT_TIMEOUT_MS, tools, thinking = thinkingFromEnv() }:
-    { maxTokens?: number; timeoutMs?: number; tools?: ToolDef[]; thinking?: boolean } = {},
+  { maxTokens = 1500, timeoutMs = DEFAULT_TIMEOUT_MS, tools, thinking = thinkingFromEnv(), deadline }:
+    CallOptions & { tools?: ToolDef[] } = {},
 ): Promise<{ content: string; tool_calls: ToolCall[]; finish_reason: string }> {
+  const budget = callBudget(timeoutMs, deadline);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), budget);
   try {
     const res = await fetch(NIM_URL, {
       method: 'POST',
@@ -95,33 +116,43 @@ export async function chat(
       finish_reason: String(choice.finish_reason ?? ''),
     };
   } catch (err) {
-    if (controller.signal.aborted) throw new Error(`Nemotron timed out after ${timeoutMs / 1000} s`);
+    if (controller.signal.aborted) throw new Error(`Nemotron timed out after ${Math.round(budget / 1000)} s`);
     throw err;
   } finally {
     clearTimeout(timer);
   }
 }
 
-// Plain completion that must return text (vision checks, fallback memo).
-// A reasoning model can spend its whole token budget thinking, so the answer arrives CUT OFF (finish_reason
-// "length") or empty. Retry once with 3x the budget and reasoning off, instead of failing on half a JSON.
-export async function nemotron(
+// The ONE retry layer. A reasoning model can spend its whole token budget thinking, so the answer arrives
+// CUT OFF (finish_reason "length"), empty, or (for JSON) unreadable. `accept` reads the answer; when it can't,
+// ask once more with 3x the token budget and reasoning off. Seen on the real API: one of four comparisons came
+// back cut off mid-JSON. With `deadline`, the retry only happens if there is time left for it.
+export async function completeWithRetry<T>(
   model: string,
   messages: ReadonlyArray<ChatMessage>,
-  options: { maxTokens?: number; timeoutMs?: number; thinking?: boolean } = {},
-): Promise<string> {
+  accept: (content: string) => T,
+  options: CallOptions = {},
+): Promise<T> {
   const first = await chat(model, messages, options);
-  if (first.finish_reason !== 'length' && first.content.trim()) return first.content;
+  if (first.finish_reason !== 'length' && first.content.trim()) {
+    try {
+      return accept(first.content);
+    } catch { /* unreadable: one retry below */ }
+  }
 
-  const maxTokens = Math.min((options.maxTokens ?? 1500) * 3, 6000);
+  const retry = { ...options, maxTokens: Math.min((options.maxTokens ?? 1500) * 3, 6000) };
   let second;
   try {
-    second = await chat(model, messages, { ...options, maxTokens, thinking: false });
+    second = await chat(model, messages, { ...retry, thinking: false });
   } catch (err) {
-    // A model that rejects the reasoning switch (HTTP 400): retry with just the bigger budget.
+    // A model that rejects the reasoning switch answers HTTP 400 at once: retry with just the bigger budget.
     if (!(err instanceof NemotronHttpError) || err.status !== 400) throw err;
-    second = await chat(model, messages, { ...options, maxTokens });
+    second = await chat(model, messages, retry);
   }
   if (!second.content.trim()) throw new Error('Nemotron returned an empty answer');
-  return second.content;
+  return accept(second.content); // still unreadable → the caller's error explains what came back
 }
+
+// Plain completion that must return text (fallback memo).
+export const nemotron = (model: string, messages: ReadonlyArray<ChatMessage>, options: CallOptions = {}) =>
+  completeWithRetry(model, messages, (content) => content, options);

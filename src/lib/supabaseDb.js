@@ -14,7 +14,10 @@ function unwrap({ data, error }) {
 
 // ───────── auth ─────────
 async function loadProfile(id) {
-  return unwrap(await supabase.from('profiles').select('id, full_name, email, role').eq('id', id).single());
+  const profile = unwrap(await supabase.from('profiles').select('id, full_name, email, role').eq('id', id).maybeSingle());
+  // An account made before the SQL ran (or outside the app) has no profile row: say so instead of a database error.
+  if (!profile) throw new Error('This account has no Walkthrough profile yet. Ask housing to add you.');
+  return profile;
 }
 export async function restoreSession() {
   const { data } = await supabase.auth.getSession();
@@ -23,7 +26,12 @@ export async function restoreSession() {
 export async function signIn(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
   if (error) throw new Error(error.message);
-  return loadProfile(data.user.id);
+  try {
+    return await loadProfile(data.user.id);
+  } catch (err) {
+    await supabase.auth.signOut(); // don't leave a half-signed-in session behind
+    throw err;
+  }
 }
 export async function signOut() {
   await supabase.auth.signOut();

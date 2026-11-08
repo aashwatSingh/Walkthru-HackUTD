@@ -52,7 +52,7 @@ Supabase Dashboard → **Edge Functions → Secrets** (or `npx supabase secrets 
 | `NVIDIA_API_KEY` | `nvapi-...` |
 | `NEMOTRON_VLM_MODEL` | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
 | `NEMOTRON_TEXT_MODEL` | `nvidia/nemotron-3.5-super-vl-120b-a12b` (same model) |
-| `PUBLIC_SITE_URL` | the Vercel URL, e.g. `https://walkthru.vercel.app` (used to load `/seed/` photos) |
+| `PUBLIC_SITE_URL` | YOUR deployed link, e.g. `https://YOUR-PROJECT.vercel.app` (used to load `/seed/` photos) |
 | `AI_REVIEW_CONCURRENCY` | optional; max vision calls at once. `2` if NVIDIA returns 429 rate-limit errors (default `4`) |
 | `NEMOTRON_IMAGES_PER_REQUEST` | optional; `1` if the verify script says your model accepts one image per request (skips the failed two-photo attempt every time; the app also learns this by itself) |
 | `NEMOTRON_ENABLE_THINKING` | optional; `false` turns Nemotron's reasoning off (faster). Leave unset for models that don't accept the switch |

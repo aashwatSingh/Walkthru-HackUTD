@@ -617,7 +617,7 @@ Walkthru-HackUTD/
 ```
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=          # the public "anon"/"publishable" key, never the service role key
-VITE_PUBLIC_SITE_URL=https://walkthru.vercel.app   # QR codes encode THIS, not window.location
+VITE_PUBLIC_SITE_URL=                            # empty = QR codes use the deployed address; set it only to print from a laptop
 VITE_DEMO_PASSWORD=              # demo accounts only
 ```
 **Edge Function secrets** (`supabase secrets set ...` or Dashboard → Edge Functions → Secrets):
@@ -625,7 +625,7 @@ VITE_DEMO_PASSWORD=              # demo accounts only
 NVIDIA_API_KEY=nvapi-...
 NEMOTRON_VLM_MODEL=nvidia/<nemotron-vl-model-id>
 NEMOTRON_TEXT_MODEL=nvidia/<nemotron-text-model-id>
-PUBLIC_SITE_URL=https://walkthru.vercel.app       # so functions can fetch /seed/ images
+PUBLIC_SITE_URL=https://YOUR-PROJECT.vercel.app  # your deployed link, so functions can fetch /seed/ images
 ```
 (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are injected into Edge Functions automatically.)
 

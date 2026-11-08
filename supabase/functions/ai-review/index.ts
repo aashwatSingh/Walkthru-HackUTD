@@ -12,7 +12,7 @@
 // Nothing here writes condition_status or estimated_fine: the admin applies suggestions.
 import { runAgent, type TraceStep } from '../_shared/agent.ts';
 import { json, preflight } from '../_shared/cors.ts';
-import { nemotron, TEXT_MODEL, VLM_MODEL } from '../_shared/nemotron.ts';
+import { callBudget, nemotron, TEXT_MODEL, VLM_MODEL } from '../_shared/nemotron.ts';
 import { AGENT_SYSTEM, agentTask, applyFees, memoMessages, normalizeMemo, parseModelJson } from '../_shared/prompts.mjs';
 import { loadImage, requireUser, serviceClient } from '../_shared/supabase.ts';
 import { buildReviewTools, isPhotoPair, type Item, type Review } from '../_shared/review-tools.ts';
@@ -22,7 +22,12 @@ import { compareImages, visionMode } from '../_shared/vision.ts';
 const MODE = Deno.env.get('AI_REVIEW_MODE') === 'pipeline' ? 'pipeline' : 'agent';
 // Max vision calls at once. Set the AI_REVIEW_CONCURRENCY secret to 2 if NVIDIA returns 429s.
 const CONCURRENCY = Math.max(1, Number(Deno.env.get('AI_REVIEW_CONCURRENCY') ?? 4) || 4);
-const BUDGET_MS = 100_000; // stays inside the Edge Function wall-clock limit
+// Time plan. Supabase stops an Edge Function at 150 s, and a stopped run saves nothing.
+//   - no new agent round starts unless it can finish by AGENT_ROUNDS_MS (a round = planning call + its tools)
+//   - EVERY Nemotron call (agent, vision, retries, the fallback memo) ends by CALLS_END_MS, even ones already running
+//   - what's left (saving results, the response) has 35 s of slack
+const AGENT_ROUNDS_MS = 100_000;
+const CALLS_END_MS = 115_000;
 
 const message = (err: unknown) => String(err instanceof Error ? err.message : err);
 function limiter(max: number) {
@@ -86,18 +91,20 @@ Deno.serve(async (req) => {
     return json({ error: message(err) }, 500);
   }
 
-  // ── Vision comparison: cached per item, concurrency-limited, 20 s timeout per call ──
+  // ── Vision comparison: cached per item, concurrency-limited, 20 s timeout per call, all ending by callDeadline ──
+  const callDeadline = startedAt + CALLS_END_MS;
   const limit = limiter(CONCURRENCY);
   const comparisons = new Map<string, Promise<Review>>();
   const compare = (item: Item): Promise<Review> => {
     if (!comparisons.has(item.id)) {
       comparisons.set(item.id, limit(async () => {
+        callBudget(20_000, callDeadline); // out of time while queued → fail fast, skip the photo downloads
         const [before, after] = await Promise.all([
           loadImage(admin, item.before_media_path!),
           loadImage(admin, item.after_media_path!),
         ]);
         // One call with both photos; two calls automatically if the model accepts one image per request.
-        return applyFees(await compareImages(vlm, item, before, after), item.standard_charge);
+        return applyFees(await compareImages(vlm, item, before, after, { deadline: callDeadline }), item.standard_charge);
       }).catch((err) => {
         comparisons.delete(item.id); // don't cache failures: the agent's next call for this item retries for real
         throw err;
@@ -114,7 +121,7 @@ Deno.serve(async (req) => {
     try {
       agent = await runAgent({
         model: textModel, system: AGENT_SYSTEM, task: agentTask(unit), tools, finalTool: 'submit_review',
-        summarize, deadline: startedAt + BUDGET_MS,
+        summarize, deadline: startedAt + AGENT_ROUNDS_MS, callDeadline,
       });
       if (!agent.final) agentError = 'agent did not call submit_review in time';
     } catch (err) {
@@ -154,7 +161,7 @@ Deno.serve(async (req) => {
         after: { notes: item.after_notes, captured_at: item.after_captured_at },
         dispute_reason: item.dispute_reason, ai: results[n],
       }));
-      const answer = await nemotron(textModel, memoMessages(unit, memoInput), { maxTokens: 2000 });
+      const answer = await nemotron(textModel, memoMessages(unit, memoInput), { maxTokens: 2000, deadline: callDeadline });
       memo = normalizeMemo(parseModelJson(answer), disputedIds);
     } catch (err) {
       memoError = message(err);
