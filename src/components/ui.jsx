@@ -5,24 +5,35 @@ import { getMediaUrl } from '../lib/dbService.js';
 
 export function Spinner({ label = '' }) {
   return (
-    <div className="flex items-center justify-center gap-2 p-10 text-muted-foreground" role="status">
-      <Loader2 className="animate-spin" size={20} /> {label}
+    <div className="flex items-center justify-center gap-2 p-10 font-mono text-sm text-muted-foreground" role="status">
+      <Loader2 className="animate-spin text-neon" size={18} /> {label}
     </div>
+  );
+}
+
+// Terminal-readout chip: [GROUP // VALUE]. The plain-English label is what screen readers hear.
+export function Readout({ group, value, cls = 'border-purple-500/30 bg-purple-500/10 text-[#c79bff]', label, dot = false, title }) {
+  return (
+    <span className={`hud-pill ${cls}`} title={title || label}>
+      {dot && <span className="live-dot bg-current" aria-hidden />}
+      <span aria-hidden><span className="opacity-60">[</span>{group} <span className="opacity-50">//</span> {value}<span className="opacity-60">]</span></span>
+      {label && <span className="sr-only">{label}</span>}
+    </span>
   );
 }
 
 export const StatusBadge = ({ status }) => {
   const m = STATUS_META[status] || STATUS_META.UNREVIEWED;
-  return <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${m.cls}`}>{m.label}</span>;
+  return <Readout group={m.code[0]} value={m.code[1]} cls={m.cls} label={m.label} />;
 };
 
 export const PhaseBadge = ({ phase }) => {
   const m = PHASE_META[phase] || PHASE_META.MOVE_IN_OPEN;
-  return <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${m.cls}`}>{m.label}</span>;
+  return <Readout group="PHASE" value={phase} cls={m.cls} label={m.label} dot={m.live} />;
 };
 
 export const ZoneBadge = ({ zone }) => (
-  <span className="inline-block rounded-md bg-white/10 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-white/75">{zone}</span>
+  <Readout group="ZONE" value={String(zone || '').toUpperCase().replaceAll(' ', '_')} label={zone} />
 );
 
 // Resolves a storage path (or /seed/ path) to a URL, then shows the image or video.
@@ -36,12 +47,37 @@ export function MediaView({ path, type = 'image', alt = '', className = '' }) {
     if (path) getMediaUrl(path).then((u) => live && setUrl(u)).catch((e) => live && setError(e.message));
     return () => { live = false; };
   }, [path]);
-  if (!path) return <div className={`flex items-center justify-center rounded-lg bg-white/10 text-sm text-white/50 ${className}`}>No photo</div>;
-  if (error) return <div className={`flex items-center justify-center rounded-lg bg-red-400/10 p-2 text-xs text-red-400 ${className}`}>{error}</div>;
-  if (!url) return <div className={`animate-pulse rounded-lg bg-white/10 ${className}`} />;
+  if (!path) return <div className={`flex items-center justify-center rounded-[3px] border border-dashed border-purple-500/30 bg-void/60 font-mono text-xs text-muted-foreground ${className}`}>[NO_SIGNAL]</div>;
+  if (error) return <div className={`flex items-center justify-center rounded-[3px] border border-rose-500/40 bg-rose-500/10 p-2 text-xs text-[#ff8fb0] ${className}`}>{error}</div>;
+  if (!url) return <div className={`animate-pulse rounded-[3px] bg-purple-500/10 ${className}`} />;
   return type === 'video'
-    ? <video src={url} controls playsInline className={`rounded-lg bg-black ${className}`} />
-    : <img src={url} alt={alt} className={`rounded-lg object-cover ${className}`} />;
+    ? <video src={url} controls playsInline className={`rounded-[3px] bg-black ${className}`} />
+    : <img src={url} alt={alt} className={`rounded-[3px] object-cover ${className}`} />;
+}
+
+// MediaView inside a forensic viewfinder: corner brackets, scanlines, and an optional HUD bar along the top.
+export function EvidenceFrame({ children, label, right, small = false, className = '' }) {
+  return (
+    <div className={`hud-frame scanlines overflow-hidden rounded-[3px] border border-purple-500/25 bg-black ${small ? 'hud-frame-sm' : ''} ${className}`}>
+      {children}
+      {(label || right) && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[4] flex items-start justify-between gap-2 print:hidden bg-gradient-to-b from-black/85 via-black/45 to-transparent px-3 pb-6 pt-2 font-mono text-[10px] tracking-[0.06em] text-cyan-100/90">
+          <span className="min-w-0 truncate">{label}</span>
+          {right && <span className="shrink-0">{right}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Live ticking UTC clock for HUD bars: 2026-11-07 09:30:00 UTC.
+export function HudClock({ className = '' }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <time dateTime={now.toISOString()} className={`tabular-nums ${className}`}>{now.toISOString().slice(0, 19).replace('T', ' ')} UTC</time>;
 }
 
 // ───────── toasts ─────────
@@ -60,10 +96,10 @@ export function ToastProvider({ children }) {
       {children}
       <div className="no-print fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`flex max-w-md items-start gap-2 rounded-xl px-4 py-3 text-sm shadow-lg ${t.kind === 'error' ? 'bg-rose-500 text-white' : t.kind === 'success' ? 'bg-primary text-primary-foreground' : 'bg-white text-black'}`}>
-            {t.kind === 'error' ? <XCircle size={18} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0" />}
+          <div key={t.id} className={`animate-rise flex max-w-md items-start gap-2.5 rounded-[3px] border bg-royal/95 px-4 py-3 text-sm shadow-[0_8px_30px_rgb(0_0_0/0.6)] backdrop-blur-md ${t.kind === 'error' ? 'border-rose-500/60 text-[#ffc2d4]' : t.kind === 'success' ? 'border-cyan-400/60 text-cyan-50' : 'border-purple-500/40 text-foreground'}`}>
+            {t.kind === 'error' ? <XCircle size={18} className="mt-0.5 shrink-0 text-[#FF2A6D]" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-neon" />}
             <span>{t.message}</span>
-            <button onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))} aria-label="Dismiss"><X size={16} /></button>
+            <button onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><X size={16} /></button>
           </div>
         ))}
       </div>
@@ -78,11 +114,11 @@ export function Modal({ title, onClose, children, wide = false }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div className="no-print fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
-      <div className={`max-h-[94vh] w-full overflow-y-auto rounded-t-2xl border border-white/10 bg-card p-5 sm:p-6 sm:rounded-2xl ${wide ? 'sm:max-w-5xl' : 'sm:max-w-md'}`} onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <h2 className="font-heading text-xl font-bold tracking-tight">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-full p-1 hover:bg-white/10"><X size={20} /></button>
+    <div className="no-print fixed inset-0 z-50 flex items-end justify-center bg-[#07060b]/80 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
+      <div className={`animate-rise max-h-[94vh] w-full overflow-y-auto rounded-t-md border border-purple-500/30 bg-royal/95 p-5 shadow-[0_0_0_1px_rgb(0_240_255/0.06),0_24px_60px_rgb(0_0_0/0.7)] backdrop-blur-md sm:rounded-md sm:p-6 ${wide ? 'sm:max-w-5xl' : 'sm:max-w-md'}`} onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-start justify-between gap-3 border-b border-purple-500/20 pb-3">
+          <h2 className="font-heading text-xl font-bold">{title}</h2>
+          <button onClick={onClose} aria-label="Close" className="rounded-[3px] p-1 text-muted-foreground hover:bg-cyan-400/10 hover:text-neon"><X size={20} /></button>
         </div>
         {children}
       </div>

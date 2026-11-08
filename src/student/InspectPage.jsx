@@ -35,9 +35,10 @@ export default function InspectPage() {
     <AppShell>
       {unit === undefined && <Spinner label="Loading your room…" />}
       {unit === null && (
-        <div className="mx-auto mt-10 max-w-sm rounded-2xl border border-white/10 bg-card p-6 text-center shadow-sm">
-          <h1 className="font-heading tracking-tight text-lg font-semibold">This room isn't assigned to you</h1>
-          <p className="mt-2 text-sm text-white/75">You're signed in as {profile.email}. Scan the QR code on your own door, or ask housing to check your room assignment.</p>
+        <div className="hud-panel mx-auto mt-10 max-w-sm border-rose-500/40 p-6 text-center">
+          <p className="mb-2 font-mono text-[11px] tracking-[0.08em] text-[#FF2A6D]">[ACCESS // DENIED]</p>
+          <h1 className="font-heading text-lg font-semibold">This room isn't assigned to you</h1>
+          <p className="mt-2 text-sm text-[#cfc9e6]">You're signed in as <span className="font-mono text-foreground">{profile.email}</span>. Scan the QR code on your own door, or ask housing to check your room assignment.</p>
           <Link to="/my-unit" className="btn btn-primary mt-4">Go to my room</Link>
         </div>
       )}
@@ -45,13 +46,13 @@ export default function InspectPage() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <div>
-              <p className="text-sm text-muted-foreground">{unit.building_name}</p>
-              <h1 className="font-heading tracking-tight text-2xl font-bold">Room {unit.room_number}</h1>
+              <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">UNIT // <span className="text-neon">{unit.unit_code}</span> · {unit.building_name}</p>
+              <h1 className="font-heading text-2xl font-bold">Room {unit.room_number}</h1>
             </div>
             <span className="ml-auto"><PhaseBadge phase={unit.inspection_phase} /></span>
           </div>
           {items.length === 0 ? (
-            <p className="rounded-2xl bg-card p-6 text-center text-white/75 shadow-sm">This room has no checklist items yet. Ask housing to check the room setup.</p>
+            <p className="hud-panel p-6 text-center text-muted-foreground">This room has no checklist items yet. Ask housing to check the room setup.</p>
           ) : unit.inspection_phase === 'MOVE_IN_OPEN' || unit.inspection_phase === 'MOVE_OUT_OPEN' ? (
             <Wizard key={unit.inspection_phase} unit={unit} items={items} onItemChanged={onItemChanged} onSubmitted={load} />
           ) : (
@@ -72,7 +73,7 @@ export function MyUnit() {
   }, [navigate]);
   return (
     <AppShell>
-      {none ? <p className="mt-10 text-center text-white/75">No room is assigned to your account yet. Ask housing to add you.</p> : <Spinner label="Finding your room…" />}
+      {none ? <p className="mt-10 text-center text-muted-foreground">No room is assigned to your account yet. Ask housing to add you.</p> : <Spinner label="Finding your room…" />}
     </AppShell>
   );
 }

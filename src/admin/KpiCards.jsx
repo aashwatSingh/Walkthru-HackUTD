@@ -1,29 +1,29 @@
-import { AlertTriangle, ClipboardCheck, DollarSign, PiggyBank } from 'lucide-react';
 import { money } from '../lib/format.js';
 
+// A single telemetry strip, not four stat cards: one ruled row of readouts with a colored rule per metric.
 export default function KpiCards({ units, rows }) {
   const inspected = units.filter((u) => u.inspection_phase !== 'MOVE_IN_OPEN').length;
   const saved = rows.reduce((s, r) => s + Number(r.waived_amount || 0), 0);
   const disputes = rows.filter((r) => r.condition_status === 'DISPUTE_UNDER_REVIEW').length;
   const billable = rows.reduce((s, r) => s + Number(r.billable_amount || 0), 0);
-  const cards = [
-    { label: 'Units inspected', value: inspected, sub: `of ${units.length} units`, icon: ClipboardCheck, tone: 'text-primary bg-primary/10' },
-    { label: '$ saved by students', value: money(saved), sub: 'pre-existing damage documented', icon: PiggyBank, tone: 'text-sky-400 bg-sky-400/10' },
-    { label: 'Active disputes', value: disputes, sub: 'waiting on housing', icon: AlertTriangle, tone: 'text-amber-400 bg-amber-400/10' },
-    { label: 'Confirmed billable', value: money(billable), sub: 'new damage charges', icon: DollarSign, tone: 'text-rose-400 bg-rose-400/10' },
+  const cells = [
+    { label: 'Units inspected', code: 'UNITS_INSPECTED', value: inspected, sub: `of ${units.length} units`, tone: 'text-foreground', rule: 'bg-violet' },
+    { label: '$ saved by students', code: 'SAVED_BY_STUDENTS', value: money(saved), sub: 'pre-existing damage documented', tone: 'text-neon', rule: 'bg-neon' },
+    { label: 'Active disputes', code: 'ACTIVE_DISPUTES', value: disputes, sub: 'waiting on housing', tone: 'text-[#FFB800]', rule: 'bg-[#FFB800]' },
+    { label: 'Confirmed billable', code: 'CONFIRMED_BILLABLE', value: money(billable), sub: 'new damage charges', tone: 'text-[#FF5C8D]', rule: 'bg-[#FF2A6D]' },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {cards.map((c) => (
-        <div key={c.label} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-card p-4 shadow-sm">
-          <span className={`rounded-xl p-2.5 ${c.tone}`}><c.icon size={20} /></span>
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{c.label}</p>
-            <p className="text-2xl font-bold" data-testid={`kpi-${c.label}`}>{c.value}</p>
-            <p className="text-xs text-muted-foreground">{c.sub}</p>
-          </div>
+    <dl className="hud-panel grid grid-cols-2 lg:grid-cols-4">
+      {cells.map((c, i) => (
+        <div key={c.label} className={`relative p-4 ${i % 2 ? 'border-l' : ''} ${i > 1 ? 'border-t lg:border-t-0' : ''} ${i === 2 ? 'lg:border-l' : ''} border-purple-500/20`}>
+          <span aria-hidden className={`absolute left-4 top-0 h-px w-10 ${c.rule} shadow-[0_0_8px_currentColor]`} />
+          <dt className="font-mono text-[10.5px] tracking-[0.06em] text-muted-foreground" title={c.label}>
+            <span className="sr-only">{c.label}</span><span aria-hidden>{c.code}</span>
+          </dt>
+          <dd className={`mt-1.5 font-mono text-2xl font-semibold tabular-nums ${c.tone}`} data-testid={`kpi-${c.label}`}>{c.value}</dd>
+          <dd className="mt-0.5 text-xs text-muted-foreground">{c.sub}</dd>
         </div>
       ))}
-    </div>
+    </dl>
   );
 }

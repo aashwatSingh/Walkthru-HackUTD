@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, DoorOpen, Lock, LogIn } from 'lucide-react';
+import { ArrowLeft, Lock, LogIn, ScanLine } from 'lucide-react';
 import { useAuth } from './AuthProvider.jsx';
 import TwoFactorModal from './TwoFactorModal.jsx';
 import { DEMO_USERS, demoEnabled, isMockMode } from '../lib/dbService.js';
@@ -54,45 +54,51 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5 py-10">
-      <Link to="/" className="mb-6 inline-flex items-center gap-1 self-start text-sm text-muted-foreground hover:text-primary"><ArrowLeft size={14} /> Back to Walkthrough</Link>
-      <div className="mb-8 text-center">
-        <span className="mx-auto mb-4 flex h-14 w-14 -rotate-6 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><DoorOpen size={28} /></span>
-        <h1 className="font-heading text-3xl font-extrabold tracking-tight">Walkthrough</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Tamper-proof move-in and move-out inspections</p>
+      <Link to="/" className="mb-8 inline-flex items-center gap-1.5 self-start font-mono text-xs text-muted-foreground hover:text-neon"><ArrowLeft size={14} /> cd ../walkthrough</Link>
+      <div className="mb-6 flex items-center gap-3">
+        <span className="hud-frame hud-frame-sm flex size-12 items-center justify-center rounded-[3px] border border-cyan-400/40 bg-cyan-400/10 text-neon shadow-[0_0_24px_rgb(0_240_255/0.2)]"><ScanLine size={24} /></span>
+        <div>
+          <h1 className="font-heading text-2xl font-bold">Walkthrough</h1>
+          <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">SECURE_LOGIN // TAMPER-PROOF ROOM EVIDENCE</p>
+        </div>
       </div>
 
       <form
         onSubmit={(e) => { e.preventDefault(); go(() => signIn(email, password)); }}
-        className="space-y-3 rounded-2xl border border-white/10 bg-card p-5 shadow-sm"
+        className="hud-panel space-y-4 p-5"
       >
+        <div className="flex items-center justify-between border-b border-purple-500/20 pb-3">
+          <span className="hud-label">Authenticate</span>
+          <span className="flex items-center gap-1.5 font-mono text-[10px] text-[#00FF9D]"><span className="live-dot bg-[#00FF9D]" aria-hidden /> 2FA REQUIRED</span>
+        </div>
         <label className="block text-sm font-medium">University email
           <input type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)}
-            className="field mt-1 py-2.5 text-base" placeholder="you@university.edu" />
+            className="field mt-1.5 py-2.5 font-mono text-[15px]" placeholder="you@university.edu" />
         </label>
         <label className="block text-sm font-medium">Password
           <input ref={passwordRef} type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)}
-            className="field mt-1 py-2.5 text-base" />
+            className="field mt-1.5 py-2.5 font-mono text-[15px]" />
         </label>
-        {notice && !error && <p className="flex items-center gap-2 rounded-xl bg-primary/10 p-2.5 text-sm text-primary" role="status"><Lock size={15} /> {notice}</p>}
-        {error && <p className="rounded-lg bg-red-400/10 p-2 text-sm text-red-200" role="alert">{error}</p>}
+        {notice && !error && <p className="flex items-center gap-2 rounded-[3px] border border-cyan-400/40 bg-cyan-400/10 p-2.5 text-sm text-cyan-100" role="status"><Lock size={15} className="shrink-0 text-neon" /> {notice}</p>}
+        {error && <p className="rounded-[3px] border border-rose-500/50 bg-rose-500/10 p-2.5 text-sm text-[#ffc2d4]" role="alert"><span className="font-mono text-xs text-[#FF2A6D]">[ACCESS_DENIED]</span> {error}</p>}
         <button disabled={busy} className="btn btn-primary btn-lg w-full">
           <LogIn size={18} /> {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
 
       {demoEnabled && (
-        <div className="mt-5 rounded-2xl border border-dashed border-white/20 bg-card/60 p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Demo quick login {isMockMode && <span className="ml-1 rounded bg-amber-400/15 px-1.5 py-0.5 text-amber-200 normal-case">mock data</span>}
+        <div className="mt-4 rounded-md border border-dashed border-purple-500/30 bg-obsidian/50 p-4">
+          <p className="hud-label mb-3 flex items-center gap-2">
+            Demo quick login {isMockMode && <span className="hud-pill border-amber-400/45 bg-amber-400/10 normal-case tracking-normal text-[#FFB800]">mock data</span>}
           </p>
           <div className="grid grid-cols-2 gap-2">
             {DEMO_USERS.map((u) => (
-              <button key={u.key} disabled={busy} onClick={() => quick(u)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-left text-sm transition-colors hover:border-primary hover:bg-primary/10">
-                <b className="flex items-center gap-1.5">{u.label}{u.needsPassword && <Lock size={13} className="text-primary" aria-hidden />}</b><span className="block text-xs text-muted-foreground">{u.note}</span>
+              <button key={u.key} disabled={busy} onClick={() => quick(u)} className="hud-hover rounded-[3px] border border-purple-500/20 bg-void/60 px-3 py-2.5 text-left text-sm">
+                <b className="flex items-center gap-1.5">{u.label}{u.needsPassword && <Lock size={13} className="text-neon" aria-hidden />}</b><span className="block font-mono text-[11px] text-muted-foreground">{u.note}</span>
               </button>
             ))}
           </div>
-          {isMockMode && <p className="mt-2 text-xs text-muted-foreground">Or type any demo email with password <code>demo1234</code>.</p>}
+          {isMockMode && <p className="mt-3 text-xs text-muted-foreground">Or type any demo email with password <code className="font-mono text-neon">demo1234</code>.</p>}
         </div>
       )}
 

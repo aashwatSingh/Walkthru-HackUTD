@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FileText, Sparkles, Unlock } from 'lucide-react';
 import AppShell from '../components/AppShell.jsx';
-import { Modal, PhaseBadge, Spinner, useToast } from '../components/ui.jsx';
+import { HudClock, Modal, PhaseBadge, Spinner, useToast } from '../components/ui.jsx';
 import KpiCards from './KpiCards.jsx';
 import Charts from './Charts.jsx';
 import ItemsTable from './ItemsTable.jsx';
@@ -55,24 +55,32 @@ export default function AdminDashboard() {
   return (
     <AppShell wide>
       <div className="space-y-5">
-        <h1 className="font-heading tracking-tight text-2xl font-bold">Housing dashboard</h1>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <p className="font-mono text-[11px] tracking-[0.08em] text-muted-foreground">OPS_CONSOLE // UNIVERSITY HOUSING</p>
+            <h1 className="font-heading text-2xl font-bold">Housing dashboard</h1>
+          </div>
+          <p className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground"><span className="live-dot bg-[#00FF9D]" aria-hidden /> SYNC // <HudClock /></p>
+        </div>
         <KpiCards units={units} rows={rows} />
         <Charts rows={rows} />
 
-        <section className="rounded-2xl border border-white/10 bg-card p-4 shadow-sm">
-          <h2 className="font-heading tracking-tight mb-3 font-semibold">Units</h2>
+        <section className="hud-panel p-4">
+          <h2 className="mb-3 flex items-center justify-between font-heading font-semibold">Units <span className="font-mono text-[11px] font-normal text-muted-foreground">{units.length} ON_GRID</span></h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {units.map((u) => (
-              <div key={u.id} className="space-y-2 rounded-xl border border-white/10 p-3" data-testid="unit-card">
+              <div key={u.id} className="hud-hover space-y-2.5 rounded-[3px] border border-purple-500/20 bg-void/50 p-3" data-testid="unit-card">
                 <div className="flex items-start justify-between gap-2">
-                  <div><p className="font-semibold">{u.unit_code}</p><p className="text-xs text-muted-foreground">{u.building_name} · {u.assigned_student_name}</p></div>
+                  <div className="min-w-0"><p className="font-mono text-[15px] font-semibold text-neon">{u.unit_code}</p><p className="truncate text-xs text-muted-foreground">{u.building_name} · {u.assigned_student_name}</p></div>
+                </div>
+                <div>
                   <PhaseBadge phase={u.inspection_phase} />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {u.inspection_phase === 'MOVE_IN_LOCKED' && <button onClick={() => startMoveOut(u)} className="btn btn-sm btn-primary"><Unlock size={13} /> Open move-out</button>}
-                  {u.inspection_phase === 'COMPLETED' && <button onClick={() => setReviewUnit(u)} className="btn btn-sm btn-lime"><Sparkles size={13} /> Run Nemotron Review</button>}
+                  {u.inspection_phase === 'COMPLETED' && <button onClick={() => setReviewUnit(u)} className="btn btn-sm border-purple-500/50 bg-purple-500/15 text-[#e4d6ff] hover:border-violet-400 hover:bg-purple-500/25 hover:shadow-[0_0_14px_rgb(157_78_221/0.4)]"><Sparkles size={13} className="text-violet-400" /> Run Nemotron Review</button>}
                   {u.inspection_phase === 'COMPLETED' && <Link to={`/report/${u.unit_code}`} className="btn btn-sm btn-outline"><FileText size={13} /> View report</Link>}
-                  {(u.inspection_phase === 'MOVE_IN_OPEN' || u.inspection_phase === 'MOVE_OUT_OPEN') && <span className="text-xs text-muted-foreground">Waiting on the student</span>}
+                  {(u.inspection_phase === 'MOVE_IN_OPEN' || u.inspection_phase === 'MOVE_OUT_OPEN') && <span className="font-mono text-[11px] text-muted-foreground">AWAITING_STUDENT…</span>}
                 </div>
               </div>
             ))}

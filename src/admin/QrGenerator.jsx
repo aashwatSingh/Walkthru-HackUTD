@@ -43,18 +43,19 @@ export default function QrGenerator() {
     }
   };
 
-  const input = 'mt-1 w-full rounded-lg border border-white/20 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30';
+  const input = 'field mt-1.5';
 
   return (
     <AppShell wide>
       <div className="space-y-5">
         <div className="no-print">
-          <h1 className="font-heading tracking-tight text-2xl font-bold">Door QR codes</h1>
+          <p className="font-mono text-[11px] tracking-[0.08em] text-muted-foreground">PRINT_QUEUE // DOOR TAGS</p>
+          <h1 className="font-heading text-2xl font-bold">Door QR codes</h1>
           <p className="text-sm text-muted-foreground">Print one per room and tape it to the door. Scanning it opens that room's guided inspection.</p>
         </div>
 
         {!units ? <Spinner /> : (
-          <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[360px_1fr]">
             <div className="no-print space-y-4">
               <label className="block text-sm font-medium">Room
                 <select value={code} onChange={(e) => setCode(e.target.value)} className={input}>
@@ -64,7 +65,7 @@ export default function QrGenerator() {
               <button onClick={() => setCreating(!creating)} className="btn btn-outline"><Plus size={16} /> New unit</button>
 
               {creating && (
-                <form onSubmit={create} className="space-y-3 rounded-2xl border border-white/10 bg-card p-4">
+                <form onSubmit={create} className="hud-panel space-y-3 p-4">
                   <label className="block text-sm font-medium">Building name<input required value={form.buildingName} onChange={set('buildingName')} className={input} placeholder="Founders Hall" /></label>
                   <label className="block text-sm font-medium">Room number<input required value={form.roomNumber} onChange={set('roomNumber')} className={input} placeholder="304-B" /></label>
                   <label className="block text-sm font-medium">Assigned student<input required value={form.studentName} onChange={set('studentName')} className={input} placeholder="Alex Rivera" /></label>
@@ -77,8 +78,8 @@ export default function QrGenerator() {
 
               {unit && (
                 <>
-                  <button onClick={() => window.print()} className="btn btn-lime btn-lg w-full"><Printer size={18} /> Print Door Check-In Flyer</button>
-                  <p className="break-all rounded-lg bg-white/10 p-2 text-xs text-white/75">Encodes: {url}</p>
+                  <button onClick={() => window.print()} className="btn btn-primary btn-lg w-full"><Printer size={18} /> Print Door Check-In Flyer</button>
+                  <p className="break-all rounded-[3px] border border-purple-500/25 bg-void/60 p-2 font-mono text-[11px] text-[#cfc9e6]">Encodes: {url}</p>
                 </>
               )}
             </div>

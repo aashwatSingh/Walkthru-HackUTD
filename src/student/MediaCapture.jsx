@@ -18,9 +18,9 @@ export default function MediaCapture({ item, unit, phase, onCapture }) {
 
   return (
     <div className="space-y-3">
-      <CameraCapture stampText={stamp} onCapture={onCapture} />
+      <CameraCapture stampText={stamp} unitCode={unit.unit_code} phaseLabel={phase === 'before' ? 'MOVE_IN' : 'MOVE_OUT'} onCapture={onCapture} />
       {isMockMode && (
-        <button type="button" onClick={useSample} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-amber-400 bg-amber-400/10 py-2.5 text-sm font-medium text-amber-200">
+        <button type="button" onClick={useSample} className="flex w-full items-center justify-center gap-2 rounded-[3px] border border-dashed border-amber-400/60 bg-amber-400/[0.07] py-2.5 text-sm font-medium text-[#ffd36b] transition-colors hover:bg-amber-400/15">
           <ImagePlus size={16} /> Demo mode: use a sample photo (no camera needed)
         </button>
       )}

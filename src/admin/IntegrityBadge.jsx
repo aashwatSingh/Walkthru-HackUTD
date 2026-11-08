@@ -16,10 +16,14 @@ export default function IntegrityBadge({ path, sha, capturedAt }) {
   }, [path, sha]);
   if (!path) return null;
 
-  const base = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium';
-  if (state === 'loading') return <span className={`${base} bg-white/10 text-muted-foreground`}><Loader2 size={13} className="animate-spin" /> Verifying…</span>;
-  if (state === 'ok') return <span title={sha} className={`${base} bg-primary/15 text-primary`}><ShieldCheck size={13} /> Fingerprint matches upload{capturedAt ? ` at ${fmtTime(capturedAt)}` : ''} · {shortHash(sha)}</span>;
-  if (state === 'bad') return <span title={sha} className={`${base} bg-red-400/15 text-red-200`}><ShieldAlert size={13} /> Mismatch: file changed since upload</span>;
-  if (state === 'error') return <span className={`${base} bg-white/10 text-muted-foreground`}><ShieldQuestion size={13} /> Could not verify</span>;
-  return <span className={`${base} bg-white/10 text-muted-foreground`}><ShieldQuestion size={13} /> Not fingerprinted</span>;
+  const base = 'hud-pill max-w-full flex-wrap whitespace-normal py-1 text-left text-[11px]';
+  if (state === 'loading') return <span className={`${base} border-purple-500/30 text-muted-foreground`}><Loader2 size={12} className="animate-spin" /> [SHA256 // VERIFYING…]</span>;
+  if (state === 'ok') return (
+    <span title={sha} className={`${base} border-cyan-400/50 bg-cyan-400/10 text-neon shadow-[0_0_10px_rgb(0_240_255/0.15)]`}>
+      <ShieldCheck size={12} /> <span className="opacity-70">[SHA256 // VERIFIED]</span> Fingerprint matches upload{capturedAt ? ` at ${fmtTime(capturedAt)}` : ''} · {shortHash(sha)}
+    </span>
+  );
+  if (state === 'bad') return <span title={sha} className={`${base} border-rose-500/60 bg-rose-500/15 text-[#FF5C8D]`}><ShieldAlert size={12} /> [SHA256 // MISMATCH] file changed since upload</span>;
+  if (state === 'error') return <span className={`${base} border-purple-500/30 text-muted-foreground`}><ShieldQuestion size={12} /> [SHA256 // UNVERIFIED] Could not verify</span>;
+  return <span className={`${base} border-purple-500/30 text-muted-foreground`}><ShieldQuestion size={12} /> [SHA256 // NONE] Not fingerprinted</span>;
 }

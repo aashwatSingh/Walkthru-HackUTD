@@ -36,16 +36,16 @@ export default function DemoSwitcher() {
   };
 
   return (
-    <div className="no-print flex items-center gap-1 rounded-full bg-white/10 px-2 py-1 text-xs text-white" aria-label="Demo role and scenario switcher">
-      <Users size={14} className="ml-1 opacity-70" />
+    <div className="no-print flex items-center gap-0.5 rounded-[3px] border border-purple-500/25 bg-obsidian/80 p-0.5 font-mono text-[11px] text-foreground" aria-label="Demo role and scenario switcher">
+      <Users size={13} className="mx-1.5 text-violet-400" aria-hidden />
       {DEMO_USERS.map((u) => (
         <button key={u.key} disabled={busy} onClick={() => switchTo(u)} title={`${u.label}: ${u.note}`}
-          className={`rounded-full px-2.5 py-1 hover:bg-white/20 ${profile?.email === u.email ? 'bg-primary font-semibold text-primary-foreground hover:bg-primary' : ''}`}>
+          className={`rounded-[2px] px-2 py-1 transition-colors hover:bg-cyan-400/10 hover:text-neon ${profile?.email === u.email ? 'bg-neon font-semibold text-void hover:bg-neon hover:text-void' : ''}`}>
           {u.label}{u.needsPassword && <Lock size={11} className="ml-1 inline -mt-0.5" aria-hidden />}
         </button>
       ))}
       {isMockMode && (
-        <button onClick={reset} title="Reset demo data" className="rounded-full p-1.5 hover:bg-white/20"><RefreshCw size={13} /></button>
+        <button onClick={reset} title="Reset demo data" className="rounded-[2px] p-1.5 text-muted-foreground hover:bg-cyan-400/10 hover:text-neon"><RefreshCw size={13} /></button>
       )}
     </div>
   );

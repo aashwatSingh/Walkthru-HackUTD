@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { DoorOpen } from 'lucide-react';
+import { ScanLine } from 'lucide-react';
 
+// Wordmark: a scanner reticle (the same corner brackets that frame every evidence photo) + the name.
 export function Logo({ to = '/', className = '' }) {
   return (
-    <Link to={to} className={`group flex items-center gap-2.5 font-heading font-bold tracking-tight ${className}`}>
-      <span className="flex size-9 -rotate-6 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform duration-300 group-hover:rotate-6 group-hover:scale-110">
-        <DoorOpen className="size-5" />
+    <Link to={to} className={`group flex items-center gap-2.5 ${className}`}>
+      <span className="hud-frame hud-frame-sm flex size-9 items-center justify-center rounded-[3px] border border-cyan-400/40 bg-cyan-400/10 text-neon transition-[box-shadow,border-color] duration-200 group-hover:border-cyan-400/80 group-hover:shadow-[0_0_14px_rgb(0_240_255/0.35)]">
+        <ScanLine className="size-[18px]" />
       </span>
-      <span className="text-xl">Walkthrough</span>
+      <span className="leading-none">
+        <span className="block font-heading text-lg font-bold tracking-[-0.02em]">Walkthrough</span>
+        <span className="mt-0.5 block font-mono text-[9.5px] tracking-[0.14em] text-muted-foreground">EVIDENCE_TERMINAL</span>
+      </span>
     </Link>
   );
 }
@@ -42,21 +46,4 @@ export function Reveal({ children, delay = 0, tilt = 0, className = '', as: Tag 
       {children}
     </Tag>
   );
-}
-
-// Headline words that pop in one by one; `highlight` words get the lime chip.
-export function PopWords({ text, highlight = [], startDelay = 0 }) {
-  return text.split(' ').map((word, i) => (
-    <span key={i} className="inline-block whitespace-nowrap">
-      <span
-        className={highlight.includes(word)
-          ? 'animate-pop relative mx-[0.08em] inline-block -rotate-2 rounded-xl bg-primary px-[0.15em] text-primary-foreground'
-          : 'animate-pop inline-block'}
-        style={{ animationDelay: `${startDelay + i * 90}ms` }}
-      >
-        {word}
-      </span>
-      {' '}
-    </span>
-  ));
 }
