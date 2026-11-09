@@ -2,7 +2,7 @@
 // scripts/verify-nvidia.mjs, so the verification script tests the exact tools the live function offers.
 // Tool results are compact JSON (no images, few tokens).
 import type { Tool } from './agent.ts';
-import type { applyFees } from './prompts.mjs';
+import { type applyFees, looksLikeInstructions } from './prompts.mjs';
 
 export type Item = {
   id: string;
@@ -25,6 +25,10 @@ export type Item = {
 
 export type Review = ReturnType<typeof applyFees>;
 
+// Student text handed to the model: short, and replaced when it reads like instructions to the AI.
+const clip = (s: string | null) =>
+  s == null ? s : looksLikeInstructions(s) ? '[removed: this text reads like instructions to the AI; a human should read it]' : s.slice(0, 600);
+
 export const isPhotoPair = (i: Item) =>
   i.before_media_type === 'image' && i.after_media_type === 'image' && !!i.before_media_path && !!i.after_media_path;
 
@@ -44,7 +48,7 @@ export function buildReviewTools(items: Item[], compare: (item: Item) => Promise
       run: () => items.map((i) => ({
         item_id: i.id, item: i.item_name, zone: i.zone_category, has_photos: isPhotoPair(i),
         status: i.condition_status, disputed: i.condition_status === 'DISPUTE_UNDER_REVIEW',
-        move_in_note: i.before_notes, move_out_note: i.after_notes,
+        move_in_note: clip(i.before_notes), move_out_note: clip(i.after_notes),
       })),
     },
     {
@@ -75,9 +79,9 @@ export function buildReviewTools(items: Item[], compare: (item: Item) => Promise
         const item = itemFor(args);
         if (!item.dispute_reason) return { item_id: item.id, has_dispute: false };
         return {
-          item_id: item.id, has_dispute: true, reason: item.dispute_reason, current_fine: item.estimated_fine,
-          move_in: { note: item.before_notes, captured_at: item.before_captured_at },
-          move_out: { note: item.after_notes, captured_at: item.after_captured_at },
+          item_id: item.id, has_dispute: true, reason: clip(item.dispute_reason), current_fine: item.estimated_fine,
+          move_in: { note: clip(item.before_notes), captured_at: item.before_captured_at },
+          move_out: { note: clip(item.after_notes), captured_at: item.after_captured_at },
         };
       },
     },

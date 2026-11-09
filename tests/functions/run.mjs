@@ -92,6 +92,8 @@ try {
     check('New damage is priced by the fee schedule, not the model', by.i1?.suggested_status === 'NEW_DAMAGE_BILLABLE' && by.i1?.suggested_fine === 22.5, JSON.stringify(by.i1));
     check('A failing vision call becomes "needs human review"', by.i2?.suggested_status === 'NEEDS_HUMAN_REVIEW' && /500/.test(by.i2?.error ?? ''), JSON.stringify(by.i2));
     check('Videos are skipped, not guessed', by.i4?.suggested_status === 'NEEDS_HUMAN_REVIEW' && !!by.i4?.skipped);
+    check('A student note with instructions for the AI sends the item to a human', by.i3?.suggested_status === 'NEEDS_HUMAN_REVIEW' && by.i3?.note_flag === true && by.i3?.suggested_fine === 0, JSON.stringify(by.i3));
+    check('...and the model never sees that note through the agent tools', !s.nimCalls.some((c) => c.sawInjection));
     check('Unknown tools and broken arguments are recorded, not fatal', r.body.agent?.trace?.filter((t) => !t.ok).length >= 2);
     check("The agent's summary is returned", r.body.memo?.admin_summary?.length > 0);
     check('Text model never receives photos', s.nimCalls.filter((c) => c.model === 'nvidia/test-text').every((c) => c.images === 0));
@@ -131,6 +133,7 @@ try {
     await ctl({ photoNim: 'ok' });
     s = await ctl();
     check('NVIDIA failure: 502, and the photo is released for a retry', r.status === 502 && !s.reviews.some((x) => x.id === claimId('p2:PHOTO_CHECK_BEFORE:u1/p2/before-1.jpg')));
+    check('...and the student sees a plain message, not the upstream error', !/upstream|Nemotron|exploded/i.test(JSON.stringify(r.body)), JSON.stringify(r.body));
     r = await post('student-token', { itemId: 'p2', phase: 'before' });
     check('...the next request runs the check', r.status === 200 && !!r.body.retake_tip);
 

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "node --no-warnings --test \"tests/unit/*.test.mjs\"",
     "test:e2e": "node tests/e2e/run.mjs",
-    "test:functions": "node tests/functions/run.mjs"
+    "test:functions": "node tests/functions/run.mjs",
+    "test:sql": "node tests/sql/run.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",

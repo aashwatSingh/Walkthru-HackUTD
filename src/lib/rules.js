@@ -25,6 +25,9 @@ export const canDispute = (profile, unit, item) =>
 
 export const homeFor = (profile) => (profile?.role === 'admin' ? '/admin' : '/my-unit');
 
+// Where to go after login. Only paths on this site: "/inspect/FH-210A" yes; "//evil.com", "https://…" and "/\\evil.com" no.
+export const safeNext = (next) => (typeof next === 'string' && /^\/(?![/\\])/.test(next) ? next : null);
+
 // Filters for the admin table (also used by the mock database).
 export function applyFilters(rows, { building, unitCode, zone, status } = {}) {
   return rows.filter(

@@ -27,7 +27,7 @@ In mock mode a **"use a sample photo"** button replaces the camera (real mode ha
 
 ## Run it on real Supabase
 
-1. In Supabase, run `supabase/migrations/001_schema.sql`, `002_policies.sql`, `003_seed.sql` (one query each, in order), create the 5 demo users in Authentication → Users (Auto Confirm), then run `004_demo_roles.sql` and `005_evidence_paths.sql`.
+1. In Supabase, run `supabase/migrations/001_schema.sql`, `002_policies.sql`, `003_seed.sql` (one query each, in order), create the 5 demo users in Authentication → Users (Auto Confirm), then run `004_demo_roles.sql`, `005_evidence_paths.sql` and `006_hardening.sql`. Run `007_admin_mfa.sql` last, after the housing admin has set up two-factor on the site (see [`SECURITY.md`](SECURITY.md)).
 2. `cp .env.example .env.local` and fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_DEMO_PASSWORD`. Leave `VITE_PUBLIC_SITE_URL` empty unless you print QR codes from your laptop (then: your deployed link, never localhost).
 3. Check NVIDIA with one command: `node --no-warnings scripts/verify-nvidia.mjs` (needs `NVIDIA_API_KEY`), then deploy the Nemotron Edge Functions: see [`supabase/functions/README.md`](supabase/functions/README.md).
 4. Optional: `node scripts/hash-seed.mjs` prints SQL that fingerprints the seed photos (green integrity badges). Re-run it if you replace a photo in `public/seed/`.
@@ -52,9 +52,10 @@ If it won't open on a phone:
 
 | Command | What it checks | Needs |
 |---|---|---|
-| `npm test` | Nemotron client: one retry, shared time limit, agent loop (fake NVIDIA) | Node 22.18+ |
-| `npm run test:e2e` | 57 browser checks: student wizard, 2FA, admin dashboard, comparator, Nemotron panel, disputes, QR codes that scan (also printed), report, admin password | first time: `npx playwright install chromium` |
-| `npm run test:functions` | the real `ai-review` and `photo-check` code under Deno against a fake Supabase + NVIDIA (22 checks) | Deno (fetched by npx if missing); port 8000 free |
+| `npm test` | Nemotron client (one retry, shared time limit, agent loop) and the prompt-injection and redirect guards | Node 22.18+ |
+| `npm run test:e2e` | 73 browser checks under the production security headers: student wizard, admin dashboard, comparator, Nemotron panel, disputes, QR codes that scan (also printed), report, admin password, and live sign-in with a real authenticator flow (fake Supabase) | first time: `npx playwright install chromium` |
+| `npm run test:functions` | the real `ai-review` and `photo-check` code under Deno against a fake Supabase + NVIDIA (25 checks) | Deno (fetched by npx if missing); port 8000 free |
+| `npm run test:sql` | 68 attacks and must-work flows against every migration (backdating, tampering, privileges, admin MFA) | `psql` + a local Postgres (`SQL_TEST_URL`) |
 
 No accounts or keys: every suite runs in mock mode or against local fakes.
 

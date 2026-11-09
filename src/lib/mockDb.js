@@ -47,10 +47,29 @@ export async function signIn(email, password) {
   await sleep(250);
   const user = USERS.find((u) => u.email === email.trim().toLowerCase());
   if (!user || password !== DEMO_PASSWORD) throw new Error('Invalid login credentials');
+  sessionStorage.removeItem(MFA_KEY);
   localStorage.setItem(USER_KEY, user.id);
   return clone(user);
 }
+
+// Second factor in demo mode: a fixed code shown on screen (the live app uses a real authenticator app).
+const MFA_KEY = 'walkthru-mfa';
+export const DEMO_2FA_CODE = '123456';
+export async function getSecondFactor(profile) {
+  return sessionStorage.getItem(MFA_KEY) === profile.id ? { kind: 'none' } : { kind: 'demo', code: DEMO_2FA_CODE };
+}
+export async function verifySecondFactor(_factor, code) {
+  if (code !== DEMO_2FA_CODE) throw new Error('That code is not right. Try again.');
+  sessionStorage.setItem(MFA_KEY, need(me()).id);
+}
+export async function skipSecondFactor(profile) {
+  sessionStorage.setItem(MFA_KEY, profile.id); // one-click demo logins
+}
+export const startTotpEnrollment = async () => {
+  throw new Error('Authenticator setup is only used on the live site.');
+};
 export async function signOut() {
+  sessionStorage.removeItem(MFA_KEY);
   localStorage.removeItem(USER_KEY);
 }
 export async function resetDemo() {

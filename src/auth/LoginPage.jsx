@@ -4,13 +4,13 @@ import { ArrowLeft, Lock, LogIn, ScanLine } from 'lucide-react';
 import { useAuth } from './AuthProvider.jsx';
 import TwoFactorModal from './TwoFactorModal.jsx';
 import { DEMO_USERS, demoEnabled, isMockMode } from '../lib/dbService.js';
-import { homeFor } from '../lib/rules.js';
+import { homeFor, safeNext } from '../lib/rules.js';
 
 export default function LoginPage() {
-  const { profile, mfaVerified, signIn, verify2fa, demoSignIn, signOut } = useAuth();
+  const { profile, mfaVerified, secondFactor, signIn, verify2fa, demoSignIn, signOut } = useAuth();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const next = params.get('next');
+  const next = safeNext(params.get('next')); // never leave this site after login
   const [email, setEmail] = useState(() => params.get('email') || '');
   const [notice, setNotice] = useState(() => (params.get('email') ? 'Enter the housing admin password, then the 2FA code.' : ''));
   const passwordRef = useRef(null);
@@ -69,7 +69,7 @@ export default function LoginPage() {
       >
         <div className="flex items-center justify-between border-b border-purple-500/20 pb-3">
           <span className="hud-label">Authenticate</span>
-          <span className="flex items-center gap-1.5 font-mono text-[10px] text-[#00FF9D]"><span className="live-dot bg-[#00FF9D]" aria-hidden /> 2FA REQUIRED</span>
+          <span className="flex items-center gap-1.5 font-mono text-[10px] text-[#00FF9D]"><span className="live-dot bg-[#00FF9D]" aria-hidden /> {isMockMode ? '2FA REQUIRED' : 'STAFF 2FA'}</span>
         </div>
         <label className="block text-sm font-medium">University email
           <input type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)}
@@ -102,13 +102,13 @@ export default function LoginPage() {
         </div>
       )}
 
-      {profile && !mfaVerified && (
+      {profile && secondFactor && !mfaVerified && (
         <TwoFactorModal
+          factor={secondFactor}
           email={profile.email}
-          onVerify={(code) => {
-            const ok = verify2fa(code);
-            if (ok) navigate(next || homeFor(profile), { replace: true });
-            return ok;
+          onVerify={async (code, factor) => {
+            await verify2fa(code, factor); // throws with a message for a wrong code
+            navigate(next || homeFor(profile), { replace: true });
           }}
           onCancel={signOut}
         />

@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
   const auth = await requireUser(req);
   if ('error' in auth) return auth.error;
   const { data: isAdmin, error: adminError } = await auth.userClient.rpc('is_admin');
-  if (adminError) return json({ error: adminError.message }, 500);
+  if (adminError) { console.error('is_admin failed', adminError.message); return json({ error: 'Admins only' }, 403); }
   if (isAdmin !== true) return json({ error: 'Admins only' }, 403);
 
   let unitId: string | undefined;

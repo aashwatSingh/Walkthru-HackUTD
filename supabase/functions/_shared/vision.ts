@@ -10,6 +10,7 @@ import {
   normalizePhotoCheck,
   parseModelJson,
   photoCheckMessages,
+  reviewNoteRisk,
 } from './prompts.mjs';
 
 export type DiffItem = {
@@ -44,7 +45,7 @@ export async function compareImages(
 ) {
   if (!singleImageOnly) {
     try {
-      return normalizeDiff(await askJson(model, damageDiffMessages(item, before, after), 1500, deadline));
+      return reviewNoteRisk(item, normalizeDiff(await askJson(model, damageDiffMessages(item, before, after), 1500, deadline)));
     } catch (err) {
       if (!rejectsRequestShape(err)) throw err;
       singleImageOnly = true;
@@ -52,7 +53,7 @@ export async function compareImages(
   }
   // Step 1: describe the move-in photo. Step 2: judge the move-out photo against that description.
   const described = await askJson(model, describePhotoMessages(item, before, 'MOVE-IN'), 800, deadline);
-  return normalizeDiff(await askJson(model, diffAgainstDescriptionMessages(item, after, described), 1500, deadline));
+  return reviewNoteRisk(item, normalizeDiff(await askJson(model, diffAgainstDescriptionMessages(item, after, described), 1500, deadline)));
 }
 
 /** Capture Coach. At move-out the move-in photo is a reference; with a one-image model the reference is dropped. */

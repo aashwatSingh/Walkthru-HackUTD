@@ -17,6 +17,7 @@ let pageRef; const step = async (name, fn) => { try { await fn(); } catch (e) { 
   const ctx = await browser.newContext({ viewport: { width: 1360, height: 900 } });
   const page = await ctx.newPage(); pageRef = page;
   page.on('pageerror', (e) => problems.push('pageerror: ' + e.message));
+  const cspViolations = []; page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) cspViolations.push(m.text().slice(0, 200)); });
   page.on('console', (m) => { if (m.type() === 'error' && !/getUserMedia|Failed to load resource/.test(m.text())) problems.push('console: ' + m.text()); });
   const text = async (sel) => (await page.locator(sel).first().innerText()).trim();
   const kpi = (label) => text(`[data-testid="kpi-${label}"]`);
@@ -24,7 +25,10 @@ let pageRef; const step = async (name, fn) => { try { await fn(); } catch (e) { 
 
   // ── 1. unauthenticated QR scan → login → back to the room
   await step('qr redirect', async () => {
-    await page.goto(`${BASE}/inspect/FH-210A`);
+    const first = await page.goto(`${BASE}/inspect/FH-210A`);
+    const h = first.headers();
+    check('Pages are served with the security headers (CSP, no framing, nosniff)',
+      /frame-ancestors 'none'/.test(h['content-security-policy'] || '') && h['x-frame-options'] === 'DENY' && h['x-content-type-options'] === 'nosniff');
     await page.waitForURL(/\/login\?next=%2Finspect%2FFH-210A/);
     check('Unauthenticated /inspect/FH-210A redirects to /login with ?next=', true);
     await page.screenshot({ path: `${S}/01-login.png` });
@@ -245,6 +249,16 @@ let pageRef; const step = async (name, fn) => { try { await fn(); } catch (e) { 
     check('Report shows all 4 items with totals', (await page.locator('.print-area section').count()) === 4 && /Total charges/.test(await text('.print-area footer')));
     await page.screenshot({ path: `${S}/12-report.png`, fullPage: true });
   });
+
+  // A link that tries to send the user to another site after login must not work.
+  await step('safe next', async () => {
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.goto(`${BASE}/login?next=${encodeURIComponent('//example.com/phish')}`);
+    await page.getByRole('button', { name: /^Jordan/ }).first().click();
+    await page.waitForURL(/\/inspect\/FH-210A/);
+    check('A hostile ?next= link is ignored: login lands on the student\'s own room', true);
+  });
+  check('No Content-Security-Policy violations during the whole run', cspViolations.length === 0, cspViolations[0]);
 
   await browser.close();
   const failed = results.filter((r) => !r[0]);

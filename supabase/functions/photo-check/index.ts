@@ -25,6 +25,11 @@ async function claimIdFor(text: string): Promise<string> {
 }
 
 const busy = () => json({ error: 'This photo is already being checked' }, 429);
+// Students get a plain message; the detail (secret names, database or model errors) stays in the function log.
+const unavailable = (detail: unknown, status = 500) => {
+  console.error('photo-check failed', detail);
+  return json({ error: 'The photo coach is unavailable right now. Your photo is saved.' }, status);
+};
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return preflight();
@@ -51,7 +56,7 @@ Deno.serve(async (req) => {
     .select('id, item_name, instruction_text, before_media_path, before_media_type, after_media_path, after_media_type')
     .eq('id', itemId)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return json({ error: 'Item not found' }, 404); // e.g. an id that is not a uuid: no database detail
   if (!item) return json({ error: 'Item not found' }, 404);
 
   const path = item[`${phase}_media_path`];
@@ -63,7 +68,7 @@ Deno.serve(async (req) => {
   try {
     model = VLM_MODEL();
   } catch (err) {
-    return json({ error: String(err instanceof Error ? err.message : err) }, 500);
+    return unavailable(err);
   }
   const admin = serviceClient();
   const kind = phase === 'before' ? 'PHOTO_CHECK_BEFORE' : 'PHOTO_CHECK_AFTER';
@@ -72,7 +77,7 @@ Deno.serve(async (req) => {
   // 1. This exact photo was already checked, or is being checked right now: never pay twice for one photo.
   const { data: existing, error: existingError } = await admin
     .from('ai_reviews').select('result, created_at').eq('id', claimId).maybeSingle();
-  if (existingError) return json({ error: existingError.message }, 500);
+  if (existingError) return unavailable(existingError.message);
   if (existing) {
     if (!existing.result?.pending) return json(existing.result);
     if (Date.now() - Date.parse(existing.created_at) < STALE_CLAIM_MS) return busy();
@@ -82,13 +87,13 @@ Deno.serve(async (req) => {
   // 2. Per item and phase cap: a student retakes a few times at most.
   const { count, error: countError } = await admin
     .from('ai_reviews').select('id', { count: 'exact', head: true }).eq('item_id', item.id).eq('kind', kind);
-  if (countError) return json({ error: countError.message }, 500);
+  if (countError) return unavailable(countError.message);
   if ((count ?? 0) >= MAX_CHECKS_PER_ITEM) return json({ skipped: true, reason: 'Photo coach limit reached for this item' });
 
   // 3. Claim the photo. Two requests at once: the second insert hits the same primary key and gets 429.
   const { error: claimError } = await admin
     .from('ai_reviews').insert({ id: claimId, item_id: item.id, kind, model, result: { pending: true, media_path: path } });
-  if (claimError) return claimError.code === '23505' ? busy() : json({ error: claimError.message }, 500);
+  if (claimError) return claimError.code === '23505' ? busy() : unavailable(claimError.message);
 
   try {
     const useReference = phase === 'after' && item.before_media_type === 'image' && !!item.before_media_path;
@@ -105,7 +110,6 @@ Deno.serve(async (req) => {
     return json(result);
   } catch (err) {
     await admin.from('ai_reviews').delete().eq('id', claimId); // free the photo so a later request can try again
-    console.error('photo-check failed', err);
-    return json({ error: String(err instanceof Error ? err.message : err) }, 502);
+    return unavailable(err, 502);
   }
 });

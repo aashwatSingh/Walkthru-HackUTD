@@ -36,6 +36,40 @@ export async function signIn(email, password) {
 export async function signOut() {
   await supabase.auth.signOut();
 }
+
+// ───────── second factor ─────────
+// Students sign in with a password. The housing admin also needs a code from an authenticator app (TOTP),
+// and the DATABASE enforces it: is_admin() is only true for a session that passed it (migration 007).
+// VITE_REQUIRE_ADMIN_MFA=false turns the prompt off (emergency lever; 007 still decides what an admin can do).
+const ADMIN_MFA = import.meta.env.VITE_REQUIRE_ADMIN_MFA !== 'false';
+const mfa = ({ data, error }) => {
+  if (error) throw new Error(error.message);
+  return data;
+};
+export async function getSecondFactor(profile) {
+  if (profile.role !== 'admin' || !ADMIN_MFA) return { kind: 'none' };
+  if (mfa(await supabase.auth.mfa.getAuthenticatorAssuranceLevel()).currentLevel === 'aal2') return { kind: 'none' };
+  const verified = mfa(await supabase.auth.mfa.listFactors()).totp?.[0];
+  return verified ? { kind: 'totp', factorId: verified.id } : { kind: 'enroll' };
+}
+export async function startTotpEnrollment() {
+  // A setup that was started but never finished blocks a new one: remove those leftovers first.
+  for (const f of mfa(await supabase.auth.mfa.listFactors()).all ?? []) {
+    if (f.factor_type === 'totp' && f.status !== 'verified') await supabase.auth.mfa.unenroll({ factorId: f.id });
+  }
+  // Names must be unique per user, and two setups can start at once (two tabs): give each its own name.
+  const friendlyName = `Authenticator app ${Math.random().toString(36).slice(2, 8)}`;
+  const f = mfa(await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName }));
+  return { factorId: f.id, qr: f.totp.qr_code, secret: f.totp.secret };
+}
+export async function verifySecondFactor(factor, code) {
+  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.factorId, code });
+  if (!error) return;
+  const wrongCode = error.code === 'mfa_verification_failed' || error.status === 422;
+  throw new Error(wrongCode ? 'That code is not right. Try again.' : error.message);
+}
+export const skipSecondFactor = async () => {}; // one-click demo logins are students: nothing to skip
+
 export const resetDemo = async () => {
   throw new Error('Reset is only available in mock mode. Re-run supabase/migrations/003_seed.sql instead.');
 };

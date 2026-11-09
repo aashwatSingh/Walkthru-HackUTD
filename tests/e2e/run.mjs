@@ -16,6 +16,8 @@ const SUITES = [
   { name: 'app', port: 4173, env: { VITE_ADMIN_NEEDS_PASSWORD: '' }, file: 'app.e2e.cjs' },
   // Built the way the real site behaves: the housing admin must type its own password.
   { name: 'admin-password', port: 4174, env: { VITE_ADMIN_NEEDS_PASSWORD: 'true' }, file: 'admin-password.e2e.cjs' },
+  // Built in LIVE mode against a fake Supabase (answered inside the test): the real sign-in and authenticator flow.
+  { name: 'live-auth', port: 4175, env: { VITE_SUPABASE_URL: 'https://walkthrough-test.supabase.co', VITE_SUPABASE_ANON_KEY: 'test-anon-key' }, file: 'live-auth.e2e.cjs' },
 ];
 
 const node = (args, env = {}) => new Promise((resolve) => {
@@ -35,7 +37,7 @@ async function waitForServer(url, ms = 30_000) {
 let failed = 0;
 for (const suite of SUITES) {
   const dir = path.join(out, suite.name);
-  console.log(`\n── ${suite.name}: building in mock mode…`);
+  console.log(`\n── ${suite.name}: building…`);
   if (await node([vite, 'build', '--outDir', dir, '--emptyOutDir', '--logLevel', 'error'], { ...MOCK_ENV, ...suite.env })) {
     failed++;
     continue;

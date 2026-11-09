@@ -14,6 +14,12 @@ export const signIn = (...a) => impl.signIn(...a);
 export const signOut = (...a) => impl.signOut(...a);
 export const resetDemo = (...a) => impl.resetDemo(...a);
 
+// Second factor after the password: { kind: 'none' | 'demo' | 'totp' | 'enroll' }.
+export const getSecondFactor = (...a) => impl.getSecondFactor(...a);
+export const startTotpEnrollment = (...a) => impl.startTotpEnrollment(...a);
+export const verifySecondFactor = (...a) => impl.verifySecondFactor(...a);
+export const skipSecondFactor = (...a) => impl.skipSecondFactor(...a);
+
 export const getMyUnits = (...a) => impl.getMyUnits(...a);
 export const getUnitByCode = (...a) => impl.getUnitByCode(...a);
 export const getInspectionItems = (...a) => impl.getInspectionItems(...a);
