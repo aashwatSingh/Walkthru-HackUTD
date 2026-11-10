@@ -1,114 +1,147 @@
 @import "tailwindcss";
 
-/* Walkthrough design system: "forensic surveillance HUD".
-   Void black + obsidian slate with royal-purple undertones; neon cyan = action / verified proof, violet = AI.
-   Space Grotesk for readable UI, JetBrains Mono for every machine fact (room codes, hashes, timestamps, money, logs). */
+/* Walkthrough design system: "evidence locker".
+   Near-black violet surfaces, quiet chrome. Neon is reserved for STATE: an element lights up when it is live,
+   verified, selected, or under the pointer. Cyan = action / proof, violet = Nemotron (AI), emerald = verified,
+   rose = billable, amber = disputed.
+   Archivo (expanded cut for display, normal width for UI) + JetBrains Mono for machine facts only:
+   room codes, fingerprints, timestamps, money. */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
-  --color-card-foreground: var(--foreground);
-  --color-elevated: var(--elevated);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--primary);
-  --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--primary);
   --color-void: #07060b;
-  --color-obsidian: #0f0c1b;
-  --color-royal: #1a1130;
+  --color-obsidian: #0d0a18;
+  --color-royal: #171130;
+  --color-plum: #231a47;
+  --color-line: rgb(170 150 255 / 0.16);
   --color-neon: #00f0ff;
   --color-violet: #9d4edd;
+  --color-lilac: #c9a6ff;
   --color-matrix: #00ff9d;
   --color-alert: #ff2a6d;
+  --color-blush: #ff7aa2;
   --color-warn: #ffb800;
-  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-heading: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --color-soft: #cfc9e6;
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: "Archivo", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
   color-scheme: dark;
   --background: #07060b;
-  --card: #0f0c1b;
-  --elevated: #1a1130;
-  --foreground: #ece9f7;
-  --muted: #161126;
-  --muted-foreground: #a29bbd;           /* 7.6:1 on void */
+  --card: #0d0a18;
+  --foreground: #efedf8;
+  --muted-foreground: #a8a2c4;           /* 7.9:1 on void */
   --primary: #00f0ff;
-  --primary-foreground: #07060b;
-  --secondary: #9d4edd;
-  --accent: rgb(0 240 255 / 0.1);
-  --destructive: #ff2a6d;
-  --border: rgb(168 85 247 / 0.2);       /* purple-500/20 */
-  --input: rgb(168 85 247 / 0.32);
-  --glow: 0 0 12px rgb(0 240 255 / 0.55);
+  --border: rgb(170 150 255 / 0.16);
+  --input: rgb(170 150 255 / 0.3);
+  --lit: 0 240 255;                      /* the pointer-light colour; data-lit="violet|rose|amber|matrix" swaps it */
 }
 
 @layer base {
   * { @apply border-border; }
+  html { scroll-behavior: smooth; }
   html, body, #root { min-height: 100%; }
   body {
     @apply font-sans text-foreground antialiased;
     background:
-      radial-gradient(1200px 600px at 50% -10%, rgb(26 17 48 / 0.9), transparent 70%),
+      radial-gradient(900px 520px at 12% -8%, rgb(120 70 220 / 0.20), transparent 68%),
+      radial-gradient(760px 480px at 100% 0%, rgb(0 240 255 / 0.07), transparent 70%),
       var(--background);
     background-attachment: fixed;
   }
-  /* The faint scanline sheen over the whole terminal. Purely decorative, never intercepts clicks. */
-  body::after {
-    content: ""; position: fixed; inset: 0; z-index: 1; pointer-events: none;
-    background: linear-gradient(transparent 50%, rgb(0 240 255 / 0.02) 50%);
-    background-size: 100% 4px;
-  }
-  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.02em; }
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.015em; }
   p { text-wrap: pretty; }
   button { cursor: pointer; }
-  button:disabled { cursor: not-allowed; opacity: .45; }
-  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  button:disabled { cursor: not-allowed; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
   input[type="range"] { accent-color: var(--primary); }
   select option { background: var(--card); color: var(--foreground); }
+  summary { cursor: pointer; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: rgb(170 150 255 / 0.22); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: rgb(0 240 255 / 0.5); border: 2px solid transparent; background-clip: padding-box; }
 }
-::selection { background: var(--primary); color: var(--primary-foreground); }
+::selection { background: var(--primary); color: #07060b; }
 
 @layer components {
-  /* Buttons: sharp corners, neon on the one action that matters. */
+  /* Display type: the expanded, heavy cut of Archivo. Used for page titles and the landing page only. */
+  .display { font-family: var(--font-heading); font-stretch: 122%; font-weight: 800; letter-spacing: -0.018em; line-height: 1.02; }
+
+  /* ── Buttons. Every button has four visible states: rest, hover (lit), pressed, focus ring. ── */
   .btn {
-    @apply inline-flex shrink-0 items-center justify-center gap-2 rounded-[3px] border border-transparent h-10 px-4 text-sm font-semibold whitespace-nowrap transition-[background-color,border-color,color,box-shadow] duration-150 select-none;
+    @apply relative inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-transparent h-10 px-4 text-sm font-semibold whitespace-nowrap select-none;
+    transition: background-color .16s, border-color .16s, color .16s, box-shadow .2s, transform .12s var(--ease-expo), opacity .16s;
   }
-  .btn-primary { @apply bg-neon text-void hover:bg-[#5ff6ff] hover:shadow-[0_0_18px_rgb(0_240_255/0.45)]; }
-  .btn-outline { @apply border-purple-500/30 bg-obsidian/60 text-foreground hover:border-cyan-400/60 hover:text-neon; }
-  .btn-ghost { @apply bg-transparent text-foreground hover:bg-cyan-400/10 hover:text-neon; }
-  .btn-danger { @apply border-alert/40 bg-alert/10 text-[#ff8fb0] hover:bg-alert/20 hover:border-alert/70; }
+  .btn:active:not(:disabled) { transform: translateY(1px) scale(0.985); }
+  .btn:disabled { opacity: .42; box-shadow: none; }
+  .btn-primary { @apply overflow-hidden bg-neon text-void; box-shadow: 0 0 0 1px rgb(0 240 255 / 0.3), 0 6px 22px -8px rgb(0 240 255 / 0.65); }
+  .btn-primary:hover:not(:disabled) { background: #6ff7ff; box-shadow: 0 0 0 1px rgb(0 240 255 / 0.55), 0 0 26px rgb(0 240 255 / 0.5); }
+  /* a light sweep across the primary action on hover */
+  .btn-primary::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; transform: translateX(-120%);
+    background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.55) 50%, transparent 65%);
+  }
+  .btn-primary:hover:not(:disabled)::after { transform: translateX(120%); transition: transform .6s var(--ease-expo); }
+  .btn-outline { @apply border-line bg-white/[0.03] text-foreground; }
+  .btn-outline:hover:not(:disabled) { @apply border-cyan-400/60 bg-cyan-400/[0.08] text-neon; box-shadow: 0 0 18px -4px rgb(0 240 255 / 0.4); }
+  .btn-ghost { @apply bg-transparent text-foreground; }
+  .btn-ghost:hover:not(:disabled) { @apply bg-cyan-400/10 text-neon; }
+  .btn-danger { @apply border-alert/40 bg-alert/10 text-blush; }
+  .btn-danger:hover:not(:disabled) { @apply border-alert/80 bg-alert/20; box-shadow: 0 0 18px -4px rgb(255 42 109 / 0.55); }
+  .btn-violet { @apply border-violet/50 bg-violet/15 text-[#ecdfff]; }
+  .btn-violet:hover:not(:disabled) { @apply border-lilac bg-violet/30; box-shadow: 0 0 20px -2px rgb(157 78 221 / 0.6); }
+  .btn-amber { @apply bg-warn text-void; box-shadow: 0 6px 22px -8px rgb(255 184 0 / 0.6); }
+  .btn-amber:hover:not(:disabled) { background: #ffcb40; box-shadow: 0 0 24px rgb(255 184 0 / 0.45); }
+  .btn-tone-cyan { @apply border-cyan-400/50 bg-cyan-400/10 text-neon; }
+  .btn-tone-cyan:hover:not(:disabled) { @apply border-cyan-300 bg-cyan-400/20; box-shadow: 0 0 20px -2px rgb(0 240 255 / 0.5); }
+  .btn-tone-rose { @apply border-alert/50 bg-alert/10 text-blush; }
+  .btn-tone-rose:hover:not(:disabled) { @apply border-alert bg-alert/20; box-shadow: 0 0 20px -2px rgb(255 42 109 / 0.5); }
+  .btn-tone-matrix { @apply border-matrix/45 bg-matrix/10 text-matrix; }
+  .btn-tone-matrix:hover:not(:disabled) { @apply border-matrix bg-matrix/20; box-shadow: 0 0 20px -2px rgb(0 255 157 / 0.45); }
   .btn-sm { @apply h-8 gap-1.5 px-3 text-[0.82rem]; }
   .btn-lg { @apply h-11 px-5 text-[0.95rem]; }
-  .btn-xl { @apply h-12 px-6 text-base; }
-  .field { @apply w-full rounded-[3px] border border-input bg-void/70 px-3 py-2 text-sm text-foreground placeholder:text-[#8d86a8] focus:border-cyan-400/70 focus:outline-none focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-60; }
+  .btn-xl { @apply h-13 px-7 text-base; }
+  .btn-icon { @apply size-9 px-0; }
 
-  /* Glass panel: the standard surface. */
-  .hud-panel { @apply rounded-md border border-purple-500/20 bg-obsidian/85 backdrop-blur-md; }
-  .hud-panel-raised { @apply rounded-md border border-purple-500/25 bg-royal/70 backdrop-blur-md; }
-  .hud-hover { @apply transition-[border-color,box-shadow] duration-200 hover:border-cyan-400/60 hover:shadow-[0_0_0_1px_rgb(0_240_255/0.15)]; }
+  .field {
+    @apply w-full rounded-md border border-input bg-void/70 px-3 py-2 text-sm text-foreground placeholder:text-[#9189b0] disabled:opacity-60;
+    transition: border-color .16s, box-shadow .2s, background-color .16s;
+  }
+  .field:hover:not(:disabled) { @apply border-cyan-400/45; }
+  .field:focus { @apply border-cyan-400/80 bg-void outline-none; box-shadow: 0 0 0 3px rgb(0 240 255 / 0.16), 0 0 22px -6px rgb(0 240 255 / 0.5); }
+  .label { @apply block text-sm font-medium text-foreground; }
 
-  /* Terminal readout pill: [LABEL // VALUE]. */
-  .hud-pill { @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-[2px] border px-1.5 py-0.5 font-mono text-[10.5px] font-medium leading-4 tracking-[0.04em]; }
-  .hud-label { @apply font-mono text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase; }
+  /* ── Surfaces: solid, one border, no blur. ── */
+  .panel { @apply rounded-xl border border-line bg-obsidian; }
+  .panel-raised { @apply rounded-xl border border-line bg-royal; }
+  .well { @apply rounded-lg border border-line bg-void/60; }
 
-  /* Inset terminal console (agent trace, logs). */
-  .term { @apply rounded-lg border border-cyan-500/30 bg-[#050408] font-mono text-xs; }
+  /* Machine facts: codes, hashes, timestamps. */
+  .fact { @apply font-mono text-[11px] tracking-[0.02em] text-muted-foreground; }
+  .kicker { @apply font-mono text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase; }
 
-  /* Forensic viewfinder: four L-shaped corner brackets drawn over the media, plus a scanline sheen. */
-  .hud-frame { position: relative; isolation: isolate; }
-  .hud-frame::after {
-    content: ""; position: absolute; inset: 6px; z-index: 3; pointer-events: none;
-    --b: rgb(34 211 238 / 0.8); --l: 18px; --w: 2px;
+  /* Status chips: a coloured dot and a plain-English label. */
+  .chip { @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-[3px] text-[11.5px] font-semibold leading-4; }
+  .chip-dot { @apply size-1.5 shrink-0 rounded-full bg-current; box-shadow: 0 0 6px currentColor; }
+  .seal { @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-cyan-400/35 bg-cyan-400/[0.08] px-2 py-[3px] font-mono text-[11px] leading-4 text-neon; }
+
+  /* Inset console (agent trace). */
+  .term { @apply rounded-xl border border-cyan-500/25 bg-[#050409] font-mono text-xs; }
+
+  /* Viewfinder: four corner brackets drawn over a photo, plus a faint scanline sheen. The app's signature. */
+  .viewfinder { position: relative; isolation: isolate; }
+  .viewfinder::after {
+    content: ""; position: absolute; inset: 7px; z-index: 3; pointer-events: none;
+    --b: rgb(34 211 238 / 0.85); --l: 18px; --w: 2px;
     background:
       linear-gradient(var(--b), var(--b)) top left / var(--l) var(--w) no-repeat,
       linear-gradient(var(--b), var(--b)) top left / var(--w) var(--l) no-repeat,
@@ -118,55 +151,107 @@
       linear-gradient(var(--b), var(--b)) bottom left / var(--w) var(--l) no-repeat,
       linear-gradient(var(--b), var(--b)) bottom right / var(--l) var(--w) no-repeat,
       linear-gradient(var(--b), var(--b)) bottom right / var(--w) var(--l) no-repeat;
+    transition: inset .3s var(--ease-expo);
   }
-  .hud-frame-sm::after { inset: 3px; --l: 10px; --w: 1.5px; }
+  .viewfinder:hover::after { inset: 4px; }
+  .viewfinder-sm::after { inset: 3px; --l: 9px; --w: 1.5px; }
+  .viewfinder-sm:hover::after { inset: 2px; }
   .scanlines::before {
     content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
-    background: linear-gradient(transparent 50%, rgb(0 240 255 / 0.02) 50%);
+    background: linear-gradient(transparent 50%, rgb(0 240 255 / 0.022) 50%);
     background-size: 100% 4px;
   }
-  /* The neon laser used for the compare-slider divider and progress fills. */
-  .laser { @apply bg-cyan-400 shadow-[0_0_12px_#00F0FF]; }
+  .laser { @apply bg-cyan-300; box-shadow: 0 0 12px #00f0ff, 0 0 2px #fff; }
+
+  /* ── Pointer light. Any [data-lit] surface glows where the pointer is, and its border lights up nearby.
+        --mx / --my are set by usePointerLight() (components/ui.jsx). ── */
+  [data-lit] { position: relative; }
+  [data-lit]::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; z-index: 1;
+    transition: opacity .3s;
+    background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), rgb(var(--lit) / 0.09), transparent 62%);
+  }
+  [data-lit]::after {
+    content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none; opacity: 0; z-index: 1;
+    transition: opacity .3s;
+    background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgb(var(--lit) / 0.95), transparent 68%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  [data-lit]:hover::before, [data-lit]:hover::after, [data-lit]:focus-visible::before, [data-lit]:focus-visible::after { opacity: 1; }
+  [data-lit="violet"] { --lit: 178 110 255; }
+  [data-lit="rose"] { --lit: 255 70 130; }
+  [data-lit="amber"] { --lit: 255 184 0; }
+  [data-lit="matrix"] { --lit: 0 255 157; }
+
+  /* Selected state for toggles, tabs and filter tiles: filled and glowing. */
+  .is-on { @apply border-cyan-400/70 bg-cyan-400/[0.12] text-neon; box-shadow: 0 0 0 1px rgb(0 240 255 / 0.2), 0 0 22px -6px rgb(0 240 255 / 0.55); }
 }
 
-/* Pulsing status dot (LIVE CAPTURE, agent running). */
-@keyframes hud-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
-.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 9999px; animation: hud-pulse 1.2s ease-in-out infinite; }
+/* ── Motion. Exponential ease-out everywhere; nothing bounces. ── */
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 9999px; animation: pulse-dot 1.2s ease-in-out infinite; }
 
-/* Terminal lines arrive one after another. */
-@keyframes type-in { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
-.animate-line { animation: type-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes line-in { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+.animate-line { animation: line-in 0.35s var(--ease-expo) both; }
 
-@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-.animate-rise { animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.animate-rise { animation: rise 0.55s var(--ease-expo) both; }
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-fade { animation: fade-in 0.3s ease-out both; }
+
+@keyframes pop-in { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: none; } }
+.animate-pop { animation: pop-in 0.32s var(--ease-expo) both; }
+
+/* A number or chip that just changed. */
+@keyframes tick { from { opacity: 0; transform: translateY(0.45em); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+.animate-tick { animation: tick 0.45s var(--ease-expo) both; }
+
+/* Camera shutter: a white flash that fades. */
+@keyframes shutter { 0% { opacity: 0.85; } 100% { opacity: 0; } }
+.animate-shutter { animation: shutter 0.5s ease-out both; }
+
+/* An edit the database refused. */
+@keyframes shake { 0%, 100% { transform: none; } 20% { transform: translateX(-6px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+.animate-shake { animation: shake 0.4s ease-out both; }
+
+/* A scan bar that travels down a photo while it is being checked. */
+@keyframes scan { 0% { transform: translateY(-10%); opacity: 0; } 15%, 85% { opacity: 1; } 100% { transform: translateY(1100%); opacity: 0; } }
+.animate-scan { animation: scan 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite both; }
+
+@keyframes toast-life { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes fill-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
 /* Scroll reveal, visible by default; only elements that start below the fold wait (see Reveal). */
-[data-reveal] { transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1); }
-[data-reveal="waiting"] { opacity: 0; transform: translateY(24px); }
+[data-reveal] { transition: opacity 0.6s var(--ease-expo), transform 0.7s var(--ease-expo); }
+[data-reveal="waiting"] { opacity: 0; transform: translateY(22px); }
 
+/* Reduced motion: every animation and transition jumps straight to its end state. */
 @media (prefers-reduced-motion: reduce) {
-  .live-dot, .animate-line, .animate-rise { animation: none; }
-  [data-reveal], [data-reveal="waiting"] { opacity: 1; transform: none; transition: none; }
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  [data-reveal], [data-reveal="waiting"] { opacity: 1; transform: none; }
+  .btn:active:not(:disabled) { transform: none; }
 }
 
 /* Print: the door flyer and the inspection report come out as plain black-on-white official documents. */
 @media print {
   :root {
     color-scheme: light;
-    --background: #fff; --foreground: #000; --card: #fff; --elevated: #fff; --muted: #f2f2f2;
-    --muted-foreground: #333; --primary: #000; --border: #bbb; --input: #bbb;
+    --background: #fff; --foreground: #000; --card: #fff; --muted-foreground: #333; --primary: #000; --border: #bbb; --input: #bbb;
   }
   body { background: #fff !important; }
-  body::after, .hud-frame::after, .scanlines::before { display: none !important; }
+  .viewfinder::after, .scanlines::before, [data-lit]::before, [data-lit]::after { display: none !important; }
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
   .print-area {
     position: absolute; left: 0; top: 0; width: 100%; max-width: none !important;
-    background: #fff !important; color: #000 !important; border: 0 !important; box-shadow: none !important; backdrop-filter: none !important;
+    background: #fff !important; color: #000 !important; border: 0 !important; box-shadow: none !important;
   }
   .print-area * {
     color: #000 !important; background-color: transparent !important; background-image: none !important; border-color: #999 !important;
-    box-shadow: none !important; text-shadow: none !important; backdrop-filter: none !important;
+    box-shadow: none !important; text-shadow: none !important; animation: none !important;
   }
   .print-area .print-qr, .print-area .print-qr * { background-color: #fff !important; }
   .print-area .print-qr { border: 4px solid #000 !important; }

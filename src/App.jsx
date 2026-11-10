@@ -5,7 +5,7 @@ import RequireRole from './auth/RequireRole.jsx';
 import LoginPage from './auth/LoginPage.jsx';
 import InspectPage, { MyUnit } from './student/InspectPage.jsx';
 import ReportPage from './report/ReportPage.jsx';
-import { Spinner } from './components/ui.jsx';
+import { Spinner, usePointerLight } from './components/ui.jsx';
 import { homeFor } from './lib/rules.js';
 import Landing from './landing/Landing.jsx';
 
@@ -21,6 +21,7 @@ function Home() {
 }
 
 export default function App() {
+  usePointerLight();
   return (
     <Suspense fallback={<Spinner label="Loading…" />}>
       <Routes>

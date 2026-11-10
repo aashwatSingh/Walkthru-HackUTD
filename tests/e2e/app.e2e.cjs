@@ -23,6 +23,25 @@ let pageRef; const step = async (name, fn) => { try { await fn(); } catch (e) { 
   const kpi = (label) => text(`[data-testid="kpi-${label}"]`);
   const switchTo = async (name) => { await page.getByRole('button', { name, exact: true }).first().click(); await page.waitForLoadState('networkidle'); };
 
+  // ── 0. landing page: the demos on it are real controls
+  await step('landing demos', async () => {
+    await page.goto(`${BASE}/`);
+    await page.getByRole('tab', { name: /Photograph and lock/ }).click();
+    await page.getByRole('button', { name: 'Take the photo' }).click();
+    await page.getByRole('button', { name: /Lock & submit/ }).click();
+    await page.getByRole('button', { name: /Try to edit it/ }).click();
+    await page.getByText('Rejected by the database.').waitFor();
+    check('Landing: shutter → lock → an edit is rejected', true);
+    await page.getByText('Fingerprint matches upload').waitFor({ timeout: 8000 });
+    await page.getByRole('button', { name: /Change one bit of the file/ }).click();
+    await page.getByText('Mismatch: file changed since upload').waitFor();
+    await page.getByRole('button', { name: /Put it back/ }).click();
+    await page.getByText('Fingerprint matches upload').waitFor();
+    check('Landing: changing one bit of the photo flips the fingerprint to a mismatch, and back', true);
+    await page.getByRole('button', { name: /Does the AI decide who pays/ }).click();
+    check('Landing: FAQ opens the question that was clicked', (await page.getByRole('button', { name: /Does the AI decide who pays/ }).getAttribute('aria-expanded')) === 'true');
+  });
+
   // ── 1. unauthenticated QR scan → login → back to the room
   await step('qr redirect', async () => {
     const first = await page.goto(`${BASE}/inspect/FH-210A`);
@@ -117,6 +136,19 @@ let pageRef; const step = async (name, fn) => { try { await fn(); } catch (e) { 
     await page.locator('select[aria-label="Room"]').selectOption('BB-118');
     check('Room filter shows only BB-118 (4 rows)', (await page.getByTestId('item-row').count()) === 4);
     await page.locator('select[aria-label="Room"]').selectOption('');
+    await page.getByRole('button', { name: /Active disputes/ }).click();
+    check('Clicking the disputes number filters the table to it', (await page.getByTestId('item-row').count()) === 1);
+    await page.getByRole('button', { name: /Clear 1 filter/ }).click();
+    await page.getByLabel('Search items').fill('priya');
+    check('Search narrows the table (Priya: 4 rows)', (await page.getByTestId('item-row').count()) === 4);
+    await page.getByLabel('Search items').fill('');
+    await page.getByRole('button', { name: 'Filter the table to FH-304B' }).click();
+    check('A room card filters the table to that room', (await page.getByTestId('item-row').count()) === 4);
+    await page.getByRole('button', { name: 'Filter the table to FH-304B' }).click();
+    await page.getByRole('button', { name: 'Fine', exact: true }).click(); await page.getByRole('button', { name: 'Fine', exact: true }).click();
+    check('Sorting by fine puts the largest charge first', /\$120\.00/.test(await page.getByTestId('item-row').first().innerText()));
+    await page.getByRole('button', { name: 'Fine', exact: true }).click();
+    check('All 16 rows are back', (await page.getByTestId('item-row').count()) === 16);
   });
 
   // ── 6. comparator + resolve the dispute
@@ -128,6 +160,11 @@ let pageRef; const step = async (name, fn) => { try { await fn(); } catch (e) { 
     await dlg.getByText(/Student dispute/).waitFor();
     await dlg.getByText(/Fingerprint matches upload/).first().waitFor({ timeout: 8000 });
     check('Comparator shows both sides, the dispute, and ✓ fingerprint matches', true);
+    await dlg.getByRole('button', { name: 'Previous item' }).click();
+    await page.getByRole('dialog', { name: /Window Blinds/ }).waitFor();
+    await page.getByRole('dialog').getByRole('button', { name: 'Following item' }).click();
+    await page.getByRole('dialog', { name: /Porcelain Sink/ }).waitFor();
+    check('Comparator steps to the neighbouring item and back', true);
     await page.screenshot({ path: `${S}/07-comparator.png` });
     await dlg.getByRole('tab', { name: 'Slider' }).click();
     await dlg.getByLabel('Comparison slider').waitFor();

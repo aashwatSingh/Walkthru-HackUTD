@@ -34,33 +34,33 @@ export default function ReportPage() {
 
   return (
     <AppShell wide>
-      <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">EXPORT // OFFICIAL_RECORD · prints black-on-white</p>
+      <div className="no-print mx-auto mb-4 flex max-w-4xl flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">This record prints black on white. <span className="fact">Save as PDF from the print dialog.</span></p>
         <button onClick={() => window.print()} className="btn btn-primary btn-lg"><Printer size={18} /> Download PDF</button>
       </div>
-      <article className="print-area hud-panel mx-auto max-w-4xl space-y-5 p-6 print:bg-white print:text-black">
-        <header className="border-b border-purple-500/25 pb-4">
+      <article className="print-area panel mx-auto max-w-4xl space-y-5 p-5 sm:p-7 print:bg-white print:text-black">
+        <header className="border-b border-line pb-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-mono text-[11px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">Walkthrough · Official inspection record</p>
-            <p className="font-mono text-[11px] text-neon">CASE // {unit.unit_code}</p>
+            <p className="kicker">Walkthrough · Official inspection record</p>
+            <p className="font-mono text-[12px] text-neon">{unit.unit_code}</p>
           </div>
-          <h1 className="mt-1 font-heading text-2xl font-bold">{unit.building_name} · Room {unit.room_number}</h1>
-          <p className="text-sm text-[#cfc9e6]">{unit.assigned_student_name} · <span className="font-mono text-xs">{unit.assigned_student_email}</span> · {unit.semester}</p>
-          <p className="mt-1 font-mono text-[11px] text-[#cfc9e6]">Move-in locked: <b>{fmtUtc(unit.move_in_locked_at)}</b> · Move-out locked: <b>{fmtUtc(unit.move_out_locked_at)}</b> (server time)</p>
+          <h1 className="display mt-2 text-[26px]">{unit.building_name} · Room {unit.room_number}</h1>
+          <p className="mt-1 text-sm text-soft">{unit.assigned_student_name} · <span className="font-mono text-xs">{unit.assigned_student_email}</span> · {unit.semester}</p>
+          <p className="mt-1.5 font-mono text-[11px] text-soft">Move-in locked: <b>{fmtUtc(unit.move_in_locked_at)}</b> · Move-out locked: <b>{fmtUtc(unit.move_out_locked_at)}</b> (server time)</p>
         </header>
 
         {items.map((i) => {
           const review = ai[i.id]?.DAMAGE_DIFF?.result;
           return (
-            <section key={i.id} className="break-inside-avoid space-y-2 border-b border-purple-500/20 pb-4">
-              <div className="flex flex-wrap items-center gap-2"><h2 className="font-heading font-semibold">{i.step_order}. {i.item_name}</h2><span className="font-mono text-[10.5px] uppercase text-muted-foreground">{i.zone_category}</span><span className="ml-auto"><StatusBadge status={i.condition_status} /></span></div>
+            <section key={i.id} className="break-inside-avoid space-y-2.5 border-b border-line pb-5">
+              <div className="flex flex-wrap items-center gap-2"><h2 className="text-[17px] font-bold">{i.step_order}. {i.item_name}</h2><span className="text-[12px] text-muted-foreground">{i.zone_category}</span><span className="ml-auto"><StatusBadge status={i.condition_status} /></span></div>
               <div className="grid grid-cols-2 gap-3">
                 {['before', 'after'].map((p) => (
-                  <figure key={p}>
-                    <EvidenceFrame small label={p === 'before' ? 'MOVE_IN' : 'MOVE_OUT'}>
-                      <MediaView path={i[`${p}_media_path`]} type={i[`${p}_media_type`]} className="aspect-[4/3] w-full" alt={p} />
+                  <figure key={p} className="min-w-0">
+                    <EvidenceFrame small label={p === 'before' ? 'MOVE-IN' : 'MOVE-OUT'}>
+                      <MediaView path={i[`${p}_media_path`]} type={i[`${p}_media_type`]} className="aspect-[4/3] w-full" alt={`${i.item_name}, ${p === 'before' ? 'move-in' : 'move-out'}`} zoom />
                     </EvidenceFrame>
-                    <figcaption className="mt-1.5 font-mono text-[10.5px] text-[#cfc9e6]">
+                    <figcaption className="mt-1.5 font-mono text-[10.5px] text-soft">
                       <b className="font-sans text-xs">{p === 'before' ? 'Move-in' : 'Move-out'}</b> · {fmtUtc(i[`${p}_captured_at`])}
                       {i[`${p}_sha256`] && <> · SHA-256 <code className="text-neon">{shortHash(i[`${p}_sha256`])}</code></>}
                       {i[`${p}_notes`] && <span className="mt-0.5 block font-sans text-xs">“{i[`${p}_notes`]}”</span>}
@@ -79,10 +79,10 @@ export default function ReportPage() {
           );
         })}
 
-        <footer className="flex flex-wrap items-baseline gap-6 text-sm">
-          <p>Total charges: <b className="font-mono text-[#FF5C8D]">{money(billable)}</b></p>
-          <p>Waived (pre-existing): <b className="font-mono text-neon">{money(waived)}</b></p>
-          <p className="ml-auto font-mono text-[10.5px] text-muted-foreground">Generated {fmtUtc(new Date().toISOString())}</p>
+        <footer className="flex flex-wrap items-baseline gap-x-8 gap-y-2 text-sm">
+          <p>Total charges: <b className="font-mono text-lg text-blush">{money(billable)}</b></p>
+          <p>Waived (pre-existing): <b className="font-mono text-lg text-neon">{money(waived)}</b></p>
+          <p className="fact ml-auto">Generated {fmtUtc(new Date().toISOString())}</p>
         </footer>
       </article>
     </AppShell>

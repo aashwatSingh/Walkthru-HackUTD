@@ -53,7 +53,7 @@ If it won't open on a phone:
 | Command | What it checks | Needs |
 |---|---|---|
 | `npm test` | Nemotron client (one retry, shared time limit, agent loop) and the prompt-injection and redirect guards | Node 22.18+ |
-| `npm run test:e2e` | 74 browser checks under the production security headers: student wizard, admin dashboard, comparator, Nemotron panel, disputes, QR codes that scan (also printed), report, admin password, and live sign-in with a real authenticator flow (fake Supabase) | first time: `npx playwright install chromium` |
+| `npm run test:e2e` | 83 browser checks under the production security headers: landing-page demos, student wizard, admin dashboard, comparator, Nemotron panel, disputes, QR codes that scan (also printed), report, admin password, and live sign-in with a real authenticator flow (fake Supabase) | first time: `npx playwright install chromium` |
 | `npm run test:functions` | the real `ai-review`, `photo-check` and `register-evidence` code under Deno against a fake Supabase + NVIDIA (51 checks) | Deno (fetched by npx if missing); port 8000 free |
 | `npm run test:sql` | 102 attacks and must-work flows against every migration (backdating, tampering, privileges, admin MFA, server-computed fingerprints) | `psql` + a local Postgres (`SQL_TEST_URL`) |
 
