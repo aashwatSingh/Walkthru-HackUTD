@@ -26,6 +26,8 @@ export const getInspectionItems = (...a) => impl.getInspectionItems(...a);
 export const getDashboardRows = (...a) => impl.getDashboardRows(...a);
 
 export const uploadStudentMedia = (...a) => impl.uploadStudentMedia(...a);
+// (itemId, phase, path): the server fingerprints the uploaded file and puts it on the item. uploadStudentMedia calls it.
+export const registerEvidence = (...a) => impl.registerEvidence(...a);
 export const removeStudentMedia = (...a) => impl.removeStudentMedia(...a);
 export const updateNotes = (...a) => impl.updateNotes(...a);
 export const lockInspection = (...a) => impl.lockInspection(...a);

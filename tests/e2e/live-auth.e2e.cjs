@@ -83,6 +83,13 @@ async function fakeSupabase(route) {
     await page.getByRole('button', { name: 'Sign in' }).click();
   };
   const type = async (code) => { for (const d of code) await page.keyboard.type(d); };
+  // Sign-out finishes when the logout request does. Loading /login before that would find the old session
+  // still stored and bounce straight back to the signed-in page.
+  const signOut = async () => {
+    const button = page.getByRole('button', { name: 'Sign out' });
+    await button.click();
+    await button.waitFor({ state: 'hidden' });
+  };
 
   try {
     // Student: password only, no code, no demo buttons on a site without a bundled demo password
@@ -93,7 +100,7 @@ async function fakeSupabase(route) {
     await login('jordan.lee@university.edu', 'student-pass');
     await page.getByText(/No room is assigned to your account/).waitFor();
     check('Student signs in with the password alone (no fake code step)', (await dialog.count()) === 0);
-    await page.getByRole('button', { name: 'Sign out' }).click();
+    await signOut();
 
     // Admin, first time: must set up an authenticator
     await login('housing.admin@university.edu', 'admin-pass');
@@ -112,7 +119,7 @@ async function fakeSupabase(route) {
     check('Correct code finishes setup and opens the dashboard', users['housing.admin@university.edu'].factors[0].status === 'verified');
 
     // Admin, next time: just the code
-    await page.getByRole('button', { name: 'Sign out' }).click();
+    await signOut();
     await login('housing.admin@university.edu', 'admin-pass');
     await dialog.getByText('Open your authenticator app').waitFor();
     check('Later logins ask for the code only (no new setup)', (await dialog.getByText('Set up two-factor').count()) === 0);

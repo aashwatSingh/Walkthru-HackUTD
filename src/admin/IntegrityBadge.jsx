@@ -3,7 +3,9 @@ import { Loader2, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react'
 import { verifyMedia } from '../lib/dbService.js';
 import { fmtTime, shortHash } from '../lib/format.js';
 
-// Re-hashes the stored file in the browser and compares it with the SHA-256 recorded at upload time.
+// Re-hashes the stored file in the browser and compares it with the SHA-256 the server computed from the stored
+// file when it was registered (register-evidence Edge Function, migration 008). Neither the student nor housing
+// can write that value, so a mismatch means the file changed after upload.
 export default function IntegrityBadge({ path, sha, capturedAt }) {
   const [state, setState] = useState('loading'); // loading | ok | bad | none | error
   useEffect(() => {

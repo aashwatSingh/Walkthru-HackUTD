@@ -27,9 +27,9 @@ In mock mode a **"use a sample photo"** button replaces the camera (real mode ha
 
 ## Run it on real Supabase
 
-1. In Supabase, run `supabase/migrations/001_schema.sql`, `002_policies.sql`, `003_seed.sql` (one query each, in order), create the 5 demo users in Authentication → Users (Auto Confirm), then run `004_demo_roles.sql`, `005_evidence_paths.sql` and `006_hardening.sql`. Run `007_admin_mfa.sql` last, after the housing admin has set up two-factor on the site (see [`SECURITY.md`](SECURITY.md)).
+1. In Supabase, run `supabase/migrations/001_schema.sql`, `002_policies.sql`, `003_seed.sql` (one query each, in order), create the 5 demo users in Authentication → Users (Auto Confirm), then run `004_demo_roles.sql`, `005_evidence_paths.sql`, `006_hardening.sql` and `008_server_fingerprints.sql`. Run `007_admin_mfa.sql` last, after the housing admin has set up two-factor on the site (see [`SECURITY.md`](SECURITY.md)).
 2. `cp .env.example .env.local` and fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_DEMO_PASSWORD`. Leave `VITE_PUBLIC_SITE_URL` empty unless you print QR codes from your laptop (then: your deployed link, never localhost).
-3. Check NVIDIA with one command: `node --no-warnings scripts/verify-nvidia.mjs` (needs `NVIDIA_API_KEY`), then deploy the Nemotron Edge Functions: see [`supabase/functions/README.md`](supabase/functions/README.md).
+3. Check NVIDIA with one command: `node --no-warnings scripts/verify-nvidia.mjs` (needs `NVIDIA_API_KEY`), then deploy the three Edge Functions (`register-evidence` is required: photo uploads go through it; the two Nemotron ones are the AI): see [`supabase/functions/README.md`](supabase/functions/README.md).
 4. Optional: `node scripts/hash-seed.mjs` prints SQL that fingerprints the seed photos (green integrity badges). Re-run it if you replace a photo in `public/seed/`.
 
 The seed photos in `public/seed/` are drawn placeholders. **Replace them with real photos of a room** (under 150 KB, 1024 px wide) so Nemotron has something real to look at.
@@ -53,9 +53,9 @@ If it won't open on a phone:
 | Command | What it checks | Needs |
 |---|---|---|
 | `npm test` | Nemotron client (one retry, shared time limit, agent loop) and the prompt-injection and redirect guards | Node 22.18+ |
-| `npm run test:e2e` | 73 browser checks under the production security headers: student wizard, admin dashboard, comparator, Nemotron panel, disputes, QR codes that scan (also printed), report, admin password, and live sign-in with a real authenticator flow (fake Supabase) | first time: `npx playwright install chromium` |
-| `npm run test:functions` | the real `ai-review` and `photo-check` code under Deno against a fake Supabase + NVIDIA (25 checks) | Deno (fetched by npx if missing); port 8000 free |
-| `npm run test:sql` | 68 attacks and must-work flows against every migration (backdating, tampering, privileges, admin MFA) | `psql` + a local Postgres (`SQL_TEST_URL`) |
+| `npm run test:e2e` | 74 browser checks under the production security headers: student wizard, admin dashboard, comparator, Nemotron panel, disputes, QR codes that scan (also printed), report, admin password, and live sign-in with a real authenticator flow (fake Supabase) | first time: `npx playwright install chromium` |
+| `npm run test:functions` | the real `ai-review`, `photo-check` and `register-evidence` code under Deno against a fake Supabase + NVIDIA (51 checks) | Deno (fetched by npx if missing); port 8000 free |
+| `npm run test:sql` | 102 attacks and must-work flows against every migration (backdating, tampering, privileges, admin MFA, server-computed fingerprints) | `psql` + a local Postgres (`SQL_TEST_URL`) |
 
 No accounts or keys: every suite runs in mock mode or against local fakes.
 
@@ -70,6 +70,6 @@ src/student/             guided inspection wizard, summary, disputes, camera
 src/admin/               dashboard, comparator, AiReviewPanel, QR generator
 src/report/              printable inspection report
 supabase/migrations/     SQL (tables, security rules, seed data)
-supabase/functions/      Nemotron Edge Functions (photo-check, ai-review)
-tests/                   unit, browser (Playwright) and Edge Function tests
+supabase/functions/      Edge Functions: register-evidence (server fingerprints), Nemotron (photo-check, ai-review)
+tests/                   unit, browser (Playwright), Edge Function and SQL tests
 ```

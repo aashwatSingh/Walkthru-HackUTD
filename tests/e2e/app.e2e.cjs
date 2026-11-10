@@ -144,6 +144,18 @@ let pageRef; const step = async (name, fn) => { try { await fn(); } catch (e) { 
     check('After waiving: $ saved = $325.00 (205 + 120)', (await kpi('$ saved by students')) === '$325.00', await kpi('$ saved by students'));
   });
 
+  // ── 6b. a photo uploaded in this session: fingerprinted from the stored bytes, and it verifies
+  await step('uploaded photo verifies', async () => {
+    const row = page.getByTestId('item-row').filter({ hasText: 'Study Desk' }).filter({ hasText: 'FH-210A' });
+    await row.getByRole('button', { name: /Inspect side-by-side/ }).click();
+    const dlg = page.getByRole('dialog');
+    await dlg.getByText('Move-in (Before)').waitFor();
+    await dlg.getByText(/Fingerprint matches upload/).first().waitFor({ timeout: 8000 });
+    check("The photo Jordan just took shows ✓ fingerprint matches (computed from the stored file)", true);
+    await page.keyboard.press('Escape');
+    await dlg.waitFor({ state: 'hidden' });
+  });
+
   // ── 7. Nemotron review panel
   await step('ai review', async () => {
     const card = page.getByTestId('unit-card').filter({ hasText: 'FH-304B' });

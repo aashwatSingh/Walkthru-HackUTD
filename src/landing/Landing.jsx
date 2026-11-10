@@ -211,7 +211,7 @@ export default function Landing() {
               <dl className="mt-8 space-y-6">
                 {[
                   [Lock, 'Locked by the database', 'After submit, Postgres rejects every edit to photos, notes and timestamps, from students and admins alike.'],
-                  [Fingerprint, 'Fingerprinted', 'Every file gets a SHA-256 hash at upload. Housing’s screen re-hashes it and shows the match.'],
+                  [Fingerprint, 'Fingerprinted', 'The server computes a SHA-256 hash of every file at upload. Housing’s screen re-hashes it and shows the match.'],
                   [Camera, 'Live camera only', 'No camera-roll uploads. Each photo is taken in the page and stamped with room, item and time.'],
                   [Scale, 'One-tap disputes', 'Students dispute a charge with a reason. Their locked move-in photo is attached automatically.'],
                 ].map(([Icon, title, body]) => (

@@ -142,7 +142,7 @@ export default function Wizard({ unit, items, onItemChanged, onSubmitted }) {
           </div>
         ) : editable ? (
           <div className="space-y-2">
-            {busy ? <p className="flex items-center justify-center gap-2 rounded-[3px] border border-cyan-400/30 bg-cyan-400/[0.06] p-6 text-center font-mono text-sm text-cyan-100"><span className="live-dot bg-neon" aria-hidden /> Uploading… hashing SHA-256</p> : <MediaCapture item={item} unit={unit} phase={phase} onCapture={handleCapture} />}
+            {busy ? <p className="flex items-center justify-center gap-2 rounded-[3px] border border-cyan-400/30 bg-cyan-400/[0.06] p-6 text-center font-mono text-sm text-cyan-100"><span className="live-dot bg-neon" aria-hidden /> Uploading… server is fingerprinting (SHA-256)</p> : <MediaCapture item={item} unit={unit} phase={phase} onCapture={handleCapture} />}
             {retaking && <button onClick={() => setRetaking(false)} className="btn btn-ghost w-full text-muted-foreground">Keep the current photo</button>}
           </div>
         ) : (
