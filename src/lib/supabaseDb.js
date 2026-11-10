@@ -94,7 +94,6 @@ export async function uploadStudentMedia({ item, phase, file, notes }) {
   const isVideo = !!file.type?.startsWith('video/');
   if (isVideo && file.size > MAX_VIDEO_BYTES) throw new Error('Video is over 50 MB. Record a shorter clip.');
   const blob = isVideo ? file : await compressImage(file); // 1024 px, quality 0.75
-  const sha = await sha256Hex(blob);
   const ext = isVideo ? (file.type.includes('mp4') ? 'mp4' : 'webm') : 'jpg';
   const path = `${item.unit_id}/${item.id}/${phase}-${Date.now()}.${ext}`;
   const up = await supabase.storage.from(BUCKET).upload(path, blob, {
@@ -102,14 +101,14 @@ export async function uploadStudentMedia({ item, phase, file, notes }) {
     upsert: false, // uploaded files are immutable
   });
   if (up.error) throw new Error(up.error.message);
-  const patch = {
-    [`${phase}_media_path`]: path,
-    [`${phase}_media_type`]: isVideo ? 'video' : 'image',
-    [`${phase}_sha256`]: sha,
-  };
-  if (notes !== undefined) patch[`${phase}_notes`] = notes;
-  // The database stamps *_captured_at with its own clock.
-  return unwrap(await supabase.from('inspection_items').update(patch).eq('id', item.id).select().single());
+  const row = await registerEvidence(item.id, phase, path);
+  return notes !== undefined ? updateNotes(item.id, phase, notes) : row;
+}
+// Puts an uploaded file on its checklist item. The SERVER fingerprints the stored file (register-evidence Edge
+// Function) and stamps the capture time: since migration 008 the browser cannot write a path, type or
+// fingerprint itself, so a fingerprint can never disagree with the file it was registered for.
+export async function registerEvidence(itemId, phase, path) {
+  return invoke('register-evidence', { itemId, phase, path });
 }
 export async function removeStudentMedia(item, phase) {
   const patch = { [`${phase}_media_path`]: null, [`${phase}_media_type`]: null, [`${phase}_sha256`]: null };
@@ -167,7 +166,7 @@ export async function verifyMedia(path, expectedSha) {
   return (await sha256Hex(await res.blob())) === expectedSha;
 }
 
-// ───────── Nemotron Edge Functions ─────────
+// ───────── Edge Functions (register-evidence, and Nemotron's photo-check and ai-review) ─────────
 async function invoke(name, body) {
   const { data, error } = await supabase.functions.invoke(name, { body });
   if (error) {

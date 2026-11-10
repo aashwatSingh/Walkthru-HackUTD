@@ -2,31 +2,35 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ScanLine } from 'lucide-react';
 
-// Wordmark: a scanner reticle (the same corner brackets that frame every evidence photo) + the name.
+// The mark: a viewfinder reticle, the same corner brackets that frame every evidence photo.
+export function Mark({ size = 36, className = '' }) {
+  return (
+    <span style={{ width: size, height: size }}
+      className={`viewfinder viewfinder-sm flex shrink-0 items-center justify-center rounded-md border border-cyan-400/40 bg-cyan-400/10 text-neon transition-[box-shadow,border-color,background-color] duration-200 ${className}`}>
+      <ScanLine size={Math.round(size / 2)} />
+    </span>
+  );
+}
+
 export function Logo({ to = '/', className = '' }) {
   return (
-    <Link to={to} className={`group flex items-center gap-2.5 ${className}`}>
-      <span className="hud-frame hud-frame-sm flex size-9 items-center justify-center rounded-[3px] border border-cyan-400/40 bg-cyan-400/10 text-neon transition-[box-shadow,border-color] duration-200 group-hover:border-cyan-400/80 group-hover:shadow-[0_0_14px_rgb(0_240_255/0.35)]">
-        <ScanLine className="size-[18px]" />
-      </span>
-      <span className="leading-none">
-        <span className="block font-heading text-lg font-bold tracking-[-0.02em]">Walkthrough</span>
-        <span className="mt-0.5 block font-mono text-[9.5px] tracking-[0.14em] text-muted-foreground">EVIDENCE_TERMINAL</span>
-      </span>
+    <Link to={to} className={`group flex items-center gap-2.5 rounded-md ${className}`}>
+      <Mark className="group-hover:border-cyan-300 group-hover:bg-cyan-400/20 group-hover:shadow-[0_0_18px_rgb(0_240_255/0.45)]" />
+      <span className="display text-[17px] tracking-[-0.01em]">Walkthrough</span>
     </Link>
   );
 }
 
 // Scroll reveal that can never ship a blank section: content is visible by default, and only elements that
 // start below the fold are hidden, then revealed when they scroll in (or after a safety timeout).
-export function Reveal({ children, delay = 0, tilt = 0, className = '', as: Tag = 'div' }) {
+export function Reveal({ children, delay = 0, className = '', as: Tag = 'div' }) {
   const ref = useRef(null);
   const [state, setState] = useState('shown');
   useEffect(() => {
     const el = ref.current;
-    if (!el || !('IntersectionObserver' in window)) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    if (el.getBoundingClientRect().top < window.innerHeight * 0.9) return; // already on screen: never hide
+    if (!el || !('IntersectionObserver' in window)) return undefined;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    if (el.getBoundingClientRect().top < window.innerHeight * 0.9) return undefined; // already on screen: never hide
     setState('waiting');
     const io = new IntersectionObserver(
       ([entry]) => {
@@ -42,8 +46,24 @@ export function Reveal({ children, delay = 0, tilt = 0, className = '', as: Tag 
     return () => { io.disconnect(); clearTimeout(safety); };
   }, []);
   return (
-    <Tag ref={ref} data-reveal={state} className={className} style={{ transitionDelay: `${delay}ms`, '--reveal-tilt': `${tilt}deg` }}>
+    <Tag ref={ref} data-reveal={state} className={className} style={{ transitionDelay: `${delay}ms` }}>
       {children}
     </Tag>
   );
+}
+
+// True once the element has scrolled into view (used to start an animation only when it can be seen).
+export function useInView(threshold = 0.3) {
+  const ref = useRef(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !('IntersectionObserver' in window)) { setSeen(true); return undefined; }
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setSeen(true); io.disconnect(); }
+    }, { threshold });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [threshold]);
+  return [ref, seen];
 }

@@ -131,6 +131,14 @@ const blobToDataUrl = (blob) =>
     r.onerror = reject;
     r.readAsDataURL(blob);
   });
+// The stored bytes of a demo file. Decoded here, not fetched: the site's Content-Security-Policy does not let
+// fetch() read data: URLs.
+function storedBlob(dataUrl) {
+  const [head, data] = dataUrl.split(',');
+  const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+  return new Blob([bytes], { type: head.slice(5).split(';')[0] });
+}
+const stored = (path) => memMedia[path] ?? load().media[path] ?? null;
 
 export async function uploadStudentMedia({ item, phase, file, notes, sample }) {
   const p = need(me());
@@ -139,22 +147,40 @@ export async function uploadStudentMedia({ item, phase, file, notes, sample }) {
   const isVideo = file.type?.startsWith('video/');
   if (isVideo && file.size > MAX_VIDEO_BYTES) throw new Error('Video is over 50 MB. Record a shorter clip.');
   const blob = isVideo ? file : await compressImage(file);
-  const sha = await sha256Hex(blob);
   const ext = isVideo ? (file.type.includes('mp4') ? 'mp4' : 'webm') : 'jpg';
   const path = `mock/${row.unit_id}/${row.id}/${phase}-${Date.now()}.${ext}`;
   const dataUrl = await blobToDataUrl(blob);
   memMedia[path] = dataUrl;
   load().media[path] = dataUrl;
   if (sample) (load().samples ||= {})[path] = sample; // lets the mock AI recognise demo sample photos
+  const out = await registerEvidence(row.id, phase, path);
+  await sleep(200);
+  return notes !== undefined ? updateNotes(row.id, phase, notes) : out;
+}
+// Mirrors the register-evidence Edge Function + register_evidence() (migration 008): the "server" checks the
+// path belongs to this item and phase, fingerprints the bytes that are STORED there, and stamps the time.
+export async function registerEvidence(itemId, phase, path) {
+  const p = need(me());
+  const row = load().items.find((i) => i.id === itemId);
+  if (!row || !visible(p, unitOf(row.unit_id))) throw new Error('Item not found');
+  editable(p, row, phase);
+  const prefix = `mock/${row.unit_id}/${row.id}/${phase}-`;
+  if (typeof path !== 'string' || !path.startsWith(prefix) || !/^[0-9]{10,16}\.(jpg|mp4|webm)$/.test(path.slice(prefix.length))) {
+    throw new Error('Evidence must be a photo uploaded for this item');
+  }
+  const dataUrl = stored(path);
+  if (!dataUrl) throw new Error('Upload the file first: nothing is stored at that path');
+  const sha = await sha256Hex(storedBlob(dataUrl));
+  if (row[`${phase}_media_path`] === path && row[`${phase}_sha256`] !== sha) {
+    throw new Error("A file's type and fingerprint are set once, when it is uploaded");
+  }
   Object.assign(row, {
     [`${phase}_media_path`]: path,
-    [`${phase}_media_type`]: isVideo ? 'video' : 'image',
+    [`${phase}_media_type`]: path.endsWith('.jpg') ? 'image' : 'video',
     [`${phase}_sha256`]: sha,
     [`${phase}_captured_at`]: new Date().toISOString(), // server time in the real database
   });
-  if (notes !== undefined) row[`${phase}_notes`] = notes;
   save();
-  await sleep(200);
   return clone(row);
 }
 export async function removeStudentMedia(item, phase) {
@@ -249,12 +275,12 @@ export async function createUnit({ buildingName, roomNumber, semester, studentNa
 export async function getMediaUrl(path) {
   if (!path) return null;
   if (path.startsWith('/seed/')) return path;
-  return memMedia[path] ?? load().media[path] ?? null;
+  return stored(path);
 }
 export async function verifyMedia(path, expectedSha) {
   const url = await getMediaUrl(path);
   if (!url) throw new Error('File not found');
-  const blob = await (await fetch(url)).blob();
+  const blob = url.startsWith('data:') ? storedBlob(url) : await (await fetch(url)).blob();
   return (await sha256Hex(blob)) === expectedSha;
 }
 

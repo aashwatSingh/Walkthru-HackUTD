@@ -35,6 +35,10 @@ for (const n of ['001', '002', '003']) load(mig(n));
 load(path.join(here, '01_users.sql'));                 // 004 needs the demo users to exist
 for (const n of ['004', '005', '006', '007']) load(mig(n));
 load(mig('006'));                                       // safe to run twice
+load(mig('008'));
+load(mig('008'));                                       // safe to run twice
+load(mig('009'));
+for (const n of ['005', '006']) load(mig(n));           // re-running an older migration must not undo 008
 load(path.join(here, '02_helpers.sql'));
 
 const out = psql(test, ['-f', path.join(here, '03_attacks.sql')]);

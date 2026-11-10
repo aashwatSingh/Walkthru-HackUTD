@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Plus, Printer } from 'lucide-react';
+import { Check, Copy, ExternalLink, Loader2, Plus, Printer, QrCode, X } from 'lucide-react';
 import AppShell from '../components/AppShell.jsx';
-import { Spinner, useToast } from '../components/ui.jsx';
+import { PhaseBadge, Spinner, useToast } from '../components/ui.jsx';
 import DoorFlyer from './DoorFlyer.jsx';
 import { createUnit, getMyUnits } from '../lib/dbService.js';
 
@@ -35,6 +35,7 @@ export default function QrGenerator() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(blank);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     getMyUnits().then((u) => { setUnits(u); setCode(u[0]?.unit_code || ''); }).catch((e) => toast(e.message, 'error'));
@@ -43,6 +44,15 @@ export default function QrGenerator() {
   const unit = units?.find((u) => u.unit_code === code);
   const url = unit ? `${SITE}/inspect/${unit.unit_code}` : '';
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      toast(url, 'info');
+    }
+  };
 
   const create = async (e) => {
     e.preventDefault();
@@ -67,29 +77,44 @@ export default function QrGenerator() {
     <AppShell wide>
       <div className="space-y-5">
         <div className="no-print">
-          <p className="font-mono text-[11px] tracking-[0.08em] text-muted-foreground">PRINT_QUEUE // DOOR TAGS</p>
-          <h1 className="font-heading text-2xl font-bold">Door QR codes</h1>
-          <p className="text-sm text-muted-foreground">Print one per room and tape it to the door. Scanning it opens that room's guided inspection.</p>
+          <h1 className="display text-[30px]">Door QR codes</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">Print one per room and tape it to the door. Scanning it opens that room's guided inspection.</p>
         </div>
 
         {!units ? <Spinner /> : (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[360px_1fr]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr]">
             <div className="no-print space-y-4">
-              <label className="block text-sm font-medium">Room
-                <select value={code} onChange={(e) => setCode(e.target.value)} className={input}>
-                  {units.map((u) => <option key={u.id} value={u.unit_code}>{u.unit_code}: {u.building_name} {u.room_number} ({u.assigned_student_name})</option>)}
-                </select>
-              </label>
-              <button onClick={() => setCreating(!creating)} className="btn btn-outline"><Plus size={16} /> New unit</button>
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold">Room</h2>
+                  <button onClick={() => setCreating(!creating)} aria-expanded={creating} className={`btn btn-sm ${creating ? 'btn-tone-cyan' : 'btn-outline'}`}>{creating ? <X size={14} /> : <Plus size={14} />} New unit</button>
+                </div>
+                <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1" role="radiogroup" aria-label="Room">
+                  {units.map((u) => {
+                    const on = u.unit_code === code;
+                    return (
+                      <button key={u.id} type="button" role="radio" aria-checked={on} data-lit onClick={() => setCode(u.unit_code)}
+                        className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-150 ${on ? 'is-on' : 'border-line bg-obsidian hover:bg-royal'}`}>
+                        <span className={`flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors ${on ? 'border-cyan-400/60 bg-cyan-400/15 text-neon' : 'border-line text-muted-foreground'}`}><QrCode size={16} aria-hidden /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-mono text-[14px] font-semibold text-neon">{u.unit_code}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{u.building_name} {u.room_number} · {u.assigned_student_name}</span>
+                        </span>
+                        <PhaseBadge phase={u.inspection_phase} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               {creating && (
-                <form onSubmit={create} className="hud-panel space-y-3 p-4">
-                  <label className="block text-sm font-medium">Building name<input required value={form.buildingName} onChange={set('buildingName')} className={input} placeholder="Founders Hall" /></label>
-                  <label className="block text-sm font-medium">Room number<input required value={form.roomNumber} onChange={set('roomNumber')} className={input} placeholder="304-B" /></label>
-                  <label className="block text-sm font-medium">Assigned student<input required value={form.studentName} onChange={set('studentName')} className={input} placeholder="Alex Rivera" /></label>
-                  <label className="block text-sm font-medium">Student email<input required type="email" value={form.studentEmail} onChange={set('studentEmail')} className={input} placeholder="alex@university.edu" /></label>
-                  <label className="block text-sm font-medium">Semester<input required value={form.semester} onChange={set('semester')} className={input} /></label>
-                  <button disabled={busy} className="btn btn-primary btn-lg w-full">{busy ? 'Creating…' : 'Create unit'}</button>
+                <form onSubmit={create} className="panel animate-pop space-y-3 p-4">
+                  <label className="label">Building name<input required value={form.buildingName} onChange={set('buildingName')} className={input} placeholder="Founders Hall" /></label>
+                  <label className="label">Room number<input required value={form.roomNumber} onChange={set('roomNumber')} className={input} placeholder="304-B" /></label>
+                  <label className="label">Assigned student<input required value={form.studentName} onChange={set('studentName')} className={input} placeholder="Alex Rivera" /></label>
+                  <label className="label">Student email<input required type="email" value={form.studentEmail} onChange={set('studentEmail')} className={input} placeholder="alex@university.edu" /></label>
+                  <label className="label">Semester<input required value={form.semester} onChange={set('semester')} className={input} /></label>
+                  <button disabled={busy} className="btn btn-primary btn-lg w-full">{busy ? <><Loader2 size={17} className="animate-spin" /> Creating…</> : 'Create unit'}</button>
                   <p className="text-xs text-muted-foreground">The 4-item checklist is added automatically.</p>
                 </form>
               )}
@@ -97,17 +122,23 @@ export default function QrGenerator() {
               {unit && (
                 <>
                   <button onClick={() => window.print()} className="btn btn-primary btn-lg w-full"><Printer size={18} /> Print Door Check-In Flyer</button>
-                  <p className="break-all rounded-[3px] border border-purple-500/25 bg-void/60 p-2 font-mono text-[11px] text-[#cfc9e6]">Encodes: {url}</p>
+                  <div className="well space-y-2 p-2.5">
+                    <p className="break-all font-mono text-[11.5px] text-soft">Encodes: {url}</p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={copy} className="btn btn-sm btn-outline flex-1">{copied ? <Check size={14} className="text-matrix" /> : <Copy size={14} />} {copied ? 'Link copied' : 'Copy link'}</button>
+                      <a href={url} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline flex-1"><ExternalLink size={14} /> Open it</a>
+                    </div>
+                  </div>
                   {SITE_CHECK && (
                     <p role={SITE_CHECK.level === 'bad' ? 'alert' : 'status'} data-testid="qr-site-check"
-                      className={`rounded-[3px] border p-2.5 text-sm ${SITE_CHECK.level === 'bad' ? 'border-amber-400/50 bg-amber-400/10 text-[#ffe3a1]' : 'border-cyan-400/40 bg-cyan-400/[0.07] text-cyan-100'}`}>
+                      className={`rounded-lg border p-2.5 text-sm ${SITE_CHECK.level === 'bad' ? 'border-warn/50 bg-warn/10 text-[#ffe3a1]' : 'border-cyan-400/40 bg-cyan-400/[0.07] text-cyan-50'}`}>
                       {SITE_CHECK.text}
                     </p>
                   )}
                 </>
               )}
             </div>
-            <div>{unit ? <DoorFlyer unit={unit} url={url} /> : <p className="text-muted-foreground">Pick or create a unit to see its QR code.</p>}</div>
+            <div key={code} className="animate-rise">{unit ? <DoorFlyer unit={unit} url={url} /> : <p className="text-muted-foreground">Pick or create a unit to see its QR code.</p>}</div>
           </div>
         )}
       </div>

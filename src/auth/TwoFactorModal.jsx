@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { Loader2, ShieldCheck } from 'lucide-react';
 import { startTotpEnrollment } from '../lib/dbService.js';
 
 // 6-box code entry: auto-advance, backspace, paste. `factor.kind` decides what the code is:
@@ -12,6 +12,7 @@ export default function TwoFactorModal({ factor, email, onVerify, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [setup, setSetup] = useState(null); // { factorId, qr, secret } while enrolling
   const refs = useRef([]);
+  const row = useRef(null);
   const enrolling = factor.kind === 'enroll';
 
   useEffect(() => refs.current[0]?.focus(), []);
@@ -32,6 +33,9 @@ export default function TwoFactorModal({ factor, email, onVerify, onCancel }) {
       setError(e.message);
       setDigits(Array(6).fill(''));
       refs.current[0]?.focus();
+      if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        row.current?.animate?.([{ transform: 'none' }, { transform: 'translateX(-7px)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(-3px)' }, { transform: 'none' }], { duration: 380, easing: 'ease-out' });
+      }
     } finally {
       setBusy(false);
     }
@@ -55,13 +59,17 @@ export default function TwoFactorModal({ factor, email, onVerify, onCancel }) {
     if (next.every(Boolean)) submit(next);
   };
 
+  const filled = digits.filter(Boolean).length;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#07060b]/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Two-factor verification">
-      <div className="animate-rise w-full max-w-sm rounded-md border border-purple-500/30 bg-royal/95 p-6 shadow-[0_24px_60px_rgb(0_0_0/0.7)]">
+    <div className="animate-fade fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-void/85 p-4" role="dialog" aria-modal="true" aria-label="Two-factor verification">
+      <div className="animate-pop w-full max-w-sm rounded-2xl border border-line bg-royal p-6 shadow-[0_0_0_1px_rgb(0_240_255/0.05),0_30px_80px_-10px_rgb(0_0_0/0.85)]">
         <div className="mb-5 flex items-center gap-3">
-          <span className="hud-frame hud-frame-sm rounded-[3px] border border-cyan-400/40 bg-cyan-400/10 p-2 text-neon"><ShieldCheck size={22} /></span>
+          <span className={`flex size-11 shrink-0 items-center justify-center rounded-xl border transition-[border-color,background-color,color,box-shadow] duration-300 ${busy ? 'border-cyan-300 bg-cyan-400/20 text-neon shadow-[0_0_22px_rgb(0_240_255/0.5)]' : 'border-cyan-400/40 bg-cyan-400/10 text-neon'}`}>
+            {busy ? <Loader2 size={22} className="animate-spin" /> : <ShieldCheck size={22} />}
+          </span>
           <div className="min-w-0">
-            <h2 className="font-heading text-lg font-semibold">{enrolling ? 'Set up two-factor' : 'Verification code'}</h2>
+            <h2 className="text-lg font-bold">{enrolling ? 'Set up two-factor' : 'Verification code'}</h2>
             <p className="text-sm text-muted-foreground">
               {enrolling ? 'Required for the housing admin account ' : 'Enter the 6-digit code for '}
               <span className="break-all font-mono text-[13px] text-foreground">{email}</span>
@@ -70,20 +78,20 @@ export default function TwoFactorModal({ factor, email, onVerify, onCancel }) {
         </div>
 
         {enrolling && (
-          <div className="mb-4 space-y-2 text-sm text-[#cfc9e6]">
+          <div className="mb-4 space-y-2 text-sm text-soft">
             <p>1. Scan this with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password).</p>
             {setup ? (
               <>
-                <img src={setup.qr} alt="QR code for your authenticator app" className="mx-auto size-44 rounded-[3px] bg-white p-2" />
+                <img src={setup.qr} alt="QR code for your authenticator app" className="mx-auto size-44 rounded-lg bg-white p-2" />
                 <p className="break-all text-center font-mono text-[11px] text-muted-foreground">Or type this key: <span className="text-foreground">{setup.secret}</span></p>
               </>
-            ) : !error && <p className="py-6 text-center font-mono text-xs text-muted-foreground">Preparing the code…</p>}
+            ) : !error && <p className="py-6 text-center text-xs text-muted-foreground">Preparing the code…</p>}
             <p>2. Enter the 6-digit code the app shows.</p>
           </div>
         )}
-        {factor.kind === 'totp' && <p className="mb-4 text-sm text-[#cfc9e6]">Open your authenticator app and enter the current code.</p>}
+        {factor.kind === 'totp' && <p className="mb-4 text-sm text-soft">Open your authenticator app and enter the current code.</p>}
 
-        <div className="flex justify-between gap-2" onPaste={onPaste}>
+        <div ref={row} className="flex justify-between gap-2" onPaste={onPaste}>
           {digits.map((d, i) => (
             <input
               key={i}
@@ -95,14 +103,21 @@ export default function TwoFactorModal({ factor, email, onVerify, onCancel }) {
               aria-label={`Digit ${i + 1}`}
               onChange={(e) => setAt(i, e.target.value.replace(/\D/g, '').slice(-1))}
               onKeyDown={(e) => e.key === 'Backspace' && !digits[i] && i > 0 && refs.current[i - 1]?.focus()}
-              className={`h-13 w-11 rounded-[3px] border bg-void text-center font-mono text-xl font-semibold text-neon caret-cyan-400 focus:border-cyan-400/80 focus:shadow-[0_0_12px_rgb(0_240_255/0.3)] focus:outline-none ${d ? 'border-cyan-400/50' : 'border-purple-500/30'}`}
+              onFocus={(e) => e.target.select()}
+              className={`h-13 w-11 rounded-lg border bg-void text-center font-mono text-xl font-semibold text-neon caret-cyan-400 transition-[border-color,box-shadow,transform] duration-150 focus:-translate-y-0.5 focus:border-cyan-300 focus:shadow-[0_0_0_3px_rgb(0_240_255/0.16),0_0_18px_rgb(0_240_255/0.4)] focus:outline-none ${error ? 'border-alert/60' : d ? 'border-cyan-400/60 shadow-[0_0_12px_-2px_rgb(0_240_255/0.5)]' : 'border-input'}`}
             />
           ))}
         </div>
-        {error && <p className="mt-3 text-sm text-[#ff8fb0]" role="alert">{error}</p>}
+        {/* six cells that light up as the code is typed */}
+        <div className="mt-3 flex gap-1" aria-hidden>
+          {digits.map((_, i) => <span key={i} className={`h-0.5 flex-1 rounded-full transition-[background-color,box-shadow] duration-200 ${i < filled ? 'bg-neon shadow-[0_0_8px_#00f0ff]' : 'bg-white/10'}`} />)}
+        </div>
+        {error && <p className="mt-3 text-sm text-blush" role="alert">{error}</p>}
         {factor.kind === 'demo' && (
-          <p className="mt-4 rounded-[3px] border border-dashed border-purple-500/30 p-2 text-center font-mono text-[11px] text-muted-foreground">
-            DEMO_CODE // <b className="text-neon">{factor.code}</b>
+          <p className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-dashed border-line p-2 text-[12.5px] text-muted-foreground">
+            Demo code
+            <button type="button" onClick={() => { const next = [...String(factor.code)]; setDigits(next); submit(next); }} title="Fill in the demo code"
+              className="rounded-md border border-cyan-400/40 bg-cyan-400/10 px-2 py-0.5 font-mono text-[13px] font-semibold tracking-[0.18em] text-neon transition-[background-color,box-shadow] hover:bg-cyan-400/20 hover:shadow-[0_0_14px_-2px_rgb(0_240_255/0.6)]">{factor.code}</button>
           </p>
         )}
         <button onClick={onCancel} className="btn btn-ghost mt-3 w-full text-muted-foreground">Cancel</button>

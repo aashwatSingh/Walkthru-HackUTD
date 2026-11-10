@@ -36,16 +36,19 @@ export default function DemoSwitcher() {
   };
 
   return (
-    <div className="no-print flex items-center gap-0.5 rounded-[3px] border border-purple-500/25 bg-obsidian/80 p-0.5 font-mono text-[11px] text-foreground" aria-label="Demo role and scenario switcher">
-      <Users size={13} className="mx-1.5 text-violet-400" aria-hidden />
-      {DEMO_USERS.map((u) => (
-        <button key={u.key} disabled={busy} onClick={() => switchTo(u)} title={`${u.label}: ${u.note}`}
-          className={`rounded-[2px] px-2 py-1 transition-colors hover:bg-cyan-400/10 hover:text-neon ${profile?.email === u.email ? 'bg-neon font-semibold text-void hover:bg-neon hover:text-void' : ''}`}>
-          {u.label}{u.needsPassword && <Lock size={11} className="ml-1 inline -mt-0.5" aria-hidden />}
-        </button>
-      ))}
+    <div className="no-print flex items-center gap-0.5 rounded-lg border border-line bg-obsidian p-0.5 text-[12.5px] font-medium text-soft" role="group" aria-label="Demo role and scenario switcher">
+      <Users size={14} className="mx-1.5 text-lilac" aria-hidden />
+      {DEMO_USERS.map((u) => {
+        const on = profile?.email === u.email;
+        return (
+          <button key={u.key} disabled={busy} onClick={() => switchTo(u)} title={`${u.label}: ${u.note}`} aria-pressed={on}
+            className={`rounded-md px-2.5 py-1 transition-[background-color,color,box-shadow] duration-150 disabled:opacity-60 ${on ? 'bg-neon font-semibold text-void shadow-[0_0_16px_-2px_rgb(0_240_255/0.7)]' : 'hover:bg-cyan-400/10 hover:text-neon'}`}>
+            {u.label}{u.needsPassword && <Lock size={11} className="-mt-0.5 ml-1 inline" aria-hidden />}
+          </button>
+        );
+      })}
       {isMockMode && (
-        <button onClick={reset} title="Reset demo data" className="rounded-[2px] p-1.5 text-muted-foreground hover:bg-cyan-400/10 hover:text-neon"><RefreshCw size={13} /></button>
+        <button onClick={reset} title="Reset demo data" aria-label="Reset demo data" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-cyan-400/10 hover:text-neon"><RefreshCw size={13} /></button>
       )}
     </div>
   );

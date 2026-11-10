@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Edge Function tests: runs the REAL ai-review and photo-check code under Deno against a local fake of
+// Edge Function tests: runs the REAL ai-review, photo-check and register-evidence code under Deno against a local fake of
 // Supabase + NVIDIA (fake-supabase.mjs). No accounts, no API key, nothing leaves your machine.
 //   npm run test:functions     (uses `deno` if installed, otherwise downloads it once through npx)
 // The functions listen on port 8000 while the test runs.
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startFake } from './fake-supabase.mjs';
@@ -152,6 +152,77 @@ try {
     check('No photo for this phase yet: 409', r.status === 409);
     r = await post('nobody', { itemId: 'p1', phase: 'before' });
     check('Not signed in: 401', r.status === 401);
+  });
+
+  await withFunction('register-evidence', async () => {
+    await ctl({ reset: true });
+    const sha = (buf) => createHash('sha256').update(buf).digest('hex');
+    const calls = async () => (await ctl()).registered;
+    const refused = async (name, tokenName, body, status, message) => {
+      const before = (await calls()).length;
+      const r = await post(tokenName, body);
+      check(name, r.status === status && (!message || message.test(r.body.error ?? '')) && (await calls()).length === before, `${r.status} ${JSON.stringify(r.body)}`);
+    };
+
+    // The happy path: the fingerprint is the SHA-256 of the bytes Storage returns for that path, nothing else.
+    const photo = randomBytes(2048);
+    const P1 = 'u3/r1/before-1700000000001.jpg';
+    await ctl({ files: { [P1]: { base64: photo.toString('base64') } } });
+    let r = await post('student-token', { itemId: 'r1', phase: 'before', path: P1, sha256: 'f'.repeat(64), before_sha256: 'f'.repeat(64), mediaType: 'video' });
+    let s = await ctl();
+    const call = s.registered[0];
+    check('The fingerprint is the SHA-256 of the bytes the function downloaded', r.status === 200 && call?.p_sha256 === sha(photo), `${r.status} ${JSON.stringify(r.body)}`);
+    check('...a fingerprint or type sent by the caller is ignored', r.body.before_sha256 === sha(photo) && r.body.before_media_type === 'image' && !JSON.stringify(call).includes('ffff'));
+    check('...the file is read and the row written with the service role, for the caller it authenticated',
+      s.downloads.some((d) => d.path === P1 && d.by === 'service-key') && call?.p_item_id === 'r1' && call?.p_phase === 'before' && call?.p_path === P1
+      && call?.p_email === 'alex.rivera@university.edu' && call?.p_user_id === 'stu-1', JSON.stringify(call));
+    check('...and the updated row comes back', r.body.id === 'r1' && r.body.before_media_path === P1 && !!r.body.before_captured_at);
+
+    const other = randomBytes(4096);
+    const P2 = 'u3/r2/before-1700000000002.jpg';
+    await ctl({ files: { [P2]: { base64: other.toString('base64') } } });
+    r = await post('student-token', { itemId: 'r2', phase: 'before', path: P2 });
+    check('A different file gets a different fingerprint', r.status === 200 && r.body.before_sha256 === sha(other) && sha(other) !== sha(photo));
+
+    const clip = randomBytes(8192);
+    const V = 'u5/r4/after-1700000000003.mp4';
+    await ctl({ files: { [V]: { base64: clip.toString('base64') } } });
+    r = await post('student-token', { itemId: 'r4', phase: 'after', path: V });
+    check('Move-out video: fingerprinted, stored as a video', r.status === 200 && r.body.after_sha256 === sha(clip) && r.body.after_media_type === 'video', JSON.stringify(r.body));
+
+    // Who may register, and when
+    await refused('Not signed in: 401', 'nobody', { itemId: 'r1', phase: 'before', path: P1 }, 401);
+    await refused("Another student's item: 404 (row security hides it)", 'other-token', { itemId: 'r1', phase: 'before', path: P1 }, 404);
+    await refused('...and the other way round', 'student-token', { itemId: 'r5', phase: 'before', path: 'u6/r5/before-1700000000001.jpg' }, 404);
+    await refused("A housing admin cannot add evidence to a student's item: 403", 'admin-token', { itemId: 'r1', phase: 'before', path: P1 }, 403, /assigned student/);
+    await refused('Move-in is locked: 409', 'student-token', { itemId: 'r3', phase: 'before', path: 'u4/r3/before-1700000000001.jpg' }, 409, /locked/);
+    await refused('Move-out has not opened yet: 409', 'student-token', { itemId: 'r3', phase: 'after', path: 'u4/r3/after-1700000000001.jpg' }, 409, /not open/);
+    await refused('A move-in photo while move-out is open: 409', 'student-token', { itemId: 'r4', phase: 'before', path: 'u5/r4/before-1700000000001.jpg' }, 409, /locked/);
+    await refused('A move-out photo while move-in is open: 409', 'student-token', { itemId: 'r1', phase: 'after', path: 'u3/r1/after-1700000000001.jpg' }, 409, /not open/);
+
+    // Which file
+    const wrongPath = (name, path, body = {}) => refused(name, 'student-token', { itemId: 'r1', phase: 'before', path, ...body }, 400, /uploaded for this item/);
+    await wrongPath("A path in another item's folder: 400", P2);
+    await wrongPath('A path for the other phase: 400', 'u3/r1/after-1700000000001.jpg');
+    await wrongPath("A path in another unit's folder: 400", 'u6/r5/before-1700000000001.jpg');
+    await wrongPath('A path that climbs out of the folder: 400', 'u3/r1/before-1700000000001.jpg/../../r2/before-1700000000002.jpg');
+    await wrongPath('A seed photo: 400', '/seed/door.jpg');
+    await wrongPath('A file type the app never produces: 400', 'u3/r1/before-1700000000001.svg');
+    s = await ctl();
+    check('...and none of those files was even downloaded', s.downloads.length === 3, JSON.stringify(s.downloads));
+
+    await ctl({ files: { 'u3/r1/before-1700000000009.jpg': null } });
+    await refused('A file that was never uploaded: 409', 'student-token', { itemId: 'r1', phase: 'before', path: 'u3/r1/before-1700000000009.jpg' }, 409, /Upload the file first/);
+    await ctl({ files: { 'u3/r1/before-1700000000008.jpg': { size: 5 * 1024 * 1024 + 1 } } });
+    await refused('A "photo" over 5 MB: 413', 'student-token', { itemId: 'r1', phase: 'before', path: 'u3/r1/before-1700000000008.jpg' }, 413, /5 MB/);
+    await refused('Missing path: 400', 'student-token', { itemId: 'r1', phase: 'before' }, 400);
+    await refused('A phase that does not exist: 400', 'student-token', { itemId: 'r1', phase: 'during', path: P1 }, 400);
+
+    // The database has the last word (e.g. the student locked the inspection while the file was being hashed).
+    await ctl({ registerError: 'Move-in inspection is locked' });
+    r = await post('student-token', { itemId: 'r1', phase: 'before', path: 'u3/r1/before-1700000000007.jpg' });
+    await ctl({ registerError: null });
+    check('The database refuses at the last step: 409 with its message', r.status === 409 && r.body.error === 'Move-in inspection is locked', `${r.status} ${JSON.stringify(r.body)}`);
   });
 } catch (err) {
   failed++;
