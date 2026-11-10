@@ -68,7 +68,8 @@ export default function ItemsTable({ rows, allRows, filters, setFilters, onInspe
           <Select label="Status" value={filters.status} onChange={set('status')} options={Object.keys(STATUS_META).filter((s) => s !== 'NEEDS_HUMAN_REVIEW').map((s) => ({ value: s, label: STATUS_META[s].label }))} />
         </div>
       </div>
-      <div className="overflow-x-auto">
+      {/* relative: the visually hidden header label is absolutely positioned and must stay inside this scroller */}
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b border-line bg-royal/50 text-[12px] text-muted-foreground">
             <tr>
@@ -95,7 +96,7 @@ export default function ItemsTable({ rows, allRows, filters, setFilters, onInspe
                 <tr key={r.id} onClick={() => onInspect(r)} className="group cursor-pointer transition-colors duration-150 hover:bg-cyan-400/[0.05]" data-testid="item-row">
                   <td className="whitespace-nowrap px-3 py-2.5">{r.assigned_student_name}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[13px] text-neon">{r.unit_code}</td>
-                  <td className="px-3 py-2.5"><span className="font-medium">{r.item_name}</span><span className="block text-[11.5px] text-muted-foreground">{r.zone_category}</span></td>
+                  <td className="min-w-[190px] px-3 py-2.5"><span className="font-medium">{r.item_name}</span><span className="block text-[11.5px] text-muted-foreground">{r.zone_category}</span></td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-soft" title={fmtUtc(r.before_captured_at)}>{fmtUtcShort(r.before_captured_at)}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-soft" title={fmtUtc(r.after_captured_at)}>{fmtUtcShort(r.after_captured_at)}</td>
                   <td className="px-3 py-2.5"><StatusBadge status={r.condition_status} /></td>

@@ -188,6 +188,13 @@
   .is-on { @apply border-cyan-400/70 bg-cyan-400/[0.12] text-neon; box-shadow: 0 0 0 1px rgb(0 240 255 / 0.2), 0 0 22px -6px rgb(0 240 255 / 0.55); }
 }
 
+/* Touch screens: small controls get a taller tap area. */
+@media (pointer: coarse) {
+  button.seal { padding-block: 7px; }
+  th button { padding-block: 9px; }
+  .btn-sm { height: 2.25rem; }
+}
+
 /* ── Motion. Exponential ease-out everywhere; nothing bounces. ── */
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 .live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 9999px; animation: pulse-dot 1.2s ease-in-out infinite; }
