@@ -13,11 +13,14 @@
 // Nothing the caller sends is stored except the path, and the file at that path is what gets hashed.
 // Stored files cannot be overwritten or deleted through the API (no update or delete policy on the bucket).
 import { json, preflight } from '../_shared/cors.ts';
-import { requireUser, serviceClient } from '../_shared/supabase.ts';
+import { requireUser, serviceClient, withinRateLimit } from '../_shared/supabase.ts';
 
 const BUCKET = 'inspection-media';
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // same limit as check_evidence(); the app compresses photos to about 150 KB
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024; // the bucket's own limit; the whole file is held in memory to hash it
+// A wizard is 4 items; retakes included, nobody registers 30 files in 10 minutes by hand.
+const MAX_CALLS = 30;
+const WINDOW_SECONDS = 600;
 const FILE_NAME = /^[0-9]{10,16}\.(jpg|mp4|webm)$/; // after the "{unit}/{item}/{phase}-" prefix; no slashes or dots to climb with
 
 const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -68,8 +71,11 @@ Deno.serve(async (req) => {
     return json({ error: 'Evidence must be a photo uploaded for this item' }, 400);
   }
 
-  // 3. Fingerprint the bytes that are actually stored.
+  // 3. Fingerprint the bytes that are actually stored. Each call downloads the file, so calls are rationed.
   const admin = serviceClient();
+  if (!(await withinRateLimit(admin, auth.user.id, 'register-evidence', MAX_CALLS, WINDOW_SECONDS))) {
+    return json({ error: 'Too many uploads in a short time. Wait a few minutes and try again.' }, 429);
+  }
   const { data: file, error: downloadError } = await admin.storage.from(BUCKET).download(path);
   if (downloadError || !file) {
     // Storage answers a missing object with HTTP 404, or HTTP 400 and statusCode "404" in the body (older versions).

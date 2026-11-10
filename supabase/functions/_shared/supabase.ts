@@ -1,5 +1,7 @@
-import { createClient, type SupabaseClient, type User } from 'jsr:@supabase/supabase-js@2';
-import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
+// Exact versions on purpose: a deploy must not pick up library code nobody tested. To upgrade, change the
+// numbers here, run `npm run test:functions`, then deploy.
+import { createClient, type SupabaseClient, type User } from 'jsr:@supabase/supabase-js@2.119.0';
+import { encodeBase64 } from 'jsr:@std/encoding@1.0.11/base64';
 import { json } from './cors.ts';
 import { imagePart, type ContentPart } from './nemotron.ts';
 
@@ -27,6 +29,18 @@ export async function requireUser(
 // Service role bypasses RLS: use it only to read media and write AI results, after requireUser().
 export const serviceClient = () =>
   createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+
+// Counts this call against the user's allowance (migration 010) and says whether it may go ahead.
+// If the limiter is not installed yet, the call is allowed and the gap is logged: a missing migration must
+// not stop students from uploading.
+export async function withinRateLimit(admin: SupabaseClient, userId: string, action: string, max: number, windowSeconds: number): Promise<boolean> {
+  const { data, error } = await admin.rpc('take_rate_limit', { p_subject: userId, p_action: action, p_max: max, p_window_seconds: windowSeconds });
+  if (error) {
+    console.error(`rate limit unavailable for ${action} (run supabase/migrations/010_scale_and_safety.sql):`, error.message);
+    return true;
+  }
+  return data !== false;
+}
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // photos should be < 150 KB (NVIDIA rejects large inline images with HTTP 415)
 

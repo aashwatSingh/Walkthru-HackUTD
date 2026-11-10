@@ -148,3 +148,55 @@ select t('9aa LEGIT retake after removing: the server registers the newer file',
 select t('9ab student removes a photo from a locked inspection', :A, $$update inspection_items set after_media_path = null, after_media_type = null, after_sha256 = null where unit_id = (select id from units where unit_code = 'FH-304B')$$, 'blocked');
 select t('9ac student removes the locked move-in photo during move-out', :S, $$update inspection_items set before_media_path = null, before_media_type = null, before_sha256 = null where unit_id = (select id from units where unit_code = 'BB-112')$$, 'blocked');
 rollback;
+
+\echo == 10. Rate limits, the audit chain, building-scoped admins and the dashboard queries (010)
+begin;
+select t('10a student calls the rate limiter itself', :S, $$select take_rate_limit(gen_random_uuid(), 'x', 100, 60)$$, 'blocked');
+select t('10b LEGIT server: two calls within a limit of two', :SRV, $$select 1 where take_rate_limit(uid_for('sam.patel@university.edu'), 'register-evidence', 2, 600) and take_rate_limit(uid_for('sam.patel@university.edu'), 'register-evidence', 2, 600)$$, 'allowed');
+select t('10c server: the third call is over the limit', :SRV, $$select 1 where take_rate_limit(uid_for('sam.patel@university.edu'), 'register-evidence', 2, 600)$$, 'no-rows');
+select t('10d LEGIT server: another student has their own allowance', :SRV, $$select 1 where take_rate_limit(uid_for('jordan.lee@university.edu'), 'register-evidence', 2, 600)$$, 'allowed');
+
+select t('   (student uploads, server registers, student adds a note)', :S, $$insert into storage.objects (bucket_id, name) values ('inspection-media', path_for('BB-112', 1, 'after-1700000000020.jpg'))$$, 'allowed');
+select t('   ', :SRV, $$select reg('BB-112', 1, 'after-1700000000020.jpg', 'sam.patel@university.edu')$$, 'allowed');
+select t('   ', :S, $$update inspection_items set after_notes = 'fine' where id = (select i.id from inspection_items i join units u on u.id = i.unit_id where u.unit_code = 'BB-112' and i.step_order = 1)$$, 'allowed');
+select t('10e LEGIT student verifies their room''s audit chain (2 entries, intact)', :S, $$select 1 where (verify_audit_chain((select id from units where unit_code = 'BB-112'))->>'ok')::boolean and (verify_audit_chain((select id from units where unit_code = 'BB-112'))->>'entries')::int = 2$$, 'allowed');
+select t('10f another student asks about that room''s chain', :M, $$select verify_audit_chain((select id from public.units_all where unit_code = 'BB-112'))$$, 'blocked');
+select t('10g student rewrites an audit entry', :S, $$update audit_log set actor_email = 'someone.else@university.edu'$$, 'blocked|no-rows');
+select t('10h admin rewrites an audit entry', :H, $$update audit_log set new_row = '{}'$$, 'blocked|no-rows');
+select t('10i the service role rewrites an audit entry', :SRV, $$update audit_log set new_row = '{}' where unit_id is not null$$, 'blocked');
+select t('10j the service role deletes audit entries', :SRV, $$delete from audit_log where unit_id is not null$$, 'blocked');
+select t('10k the service role truncates the audit log', :SRV, $$truncate audit_log$$, 'blocked');
+-- Someone with the database password switches the guard off and rewrites history: the chain no longer verifies.
+alter table audit_log disable trigger audit_log_no_rewrite;
+update audit_log set new_row = jsonb_set(new_row, '{after_notes}', '"nothing to see"') where id = (select max(id) from audit_log where unit_id = (select id from units where unit_code = 'BB-112'));
+alter table audit_log enable trigger audit_log_no_rewrite;
+select case when (verify_audit_chain((select id from units where unit_code = 'BB-112'))->>'ok')::boolean
+  then '!! HOLE    10l a rewritten audit entry still verifies' else 'ok         10l a rewritten audit entry breaks the room''s chain -> detected' end;
+rollback;
+
+begin;
+select t('10m LEGIT unscoped admin sees both buildings', :H, $$select 1 from units where building_name = 'Bluebonnet Hall'$$, 'allowed');
+select t('   (a student in the other building uploads a file)', :S, $$insert into storage.objects (bucket_id, name) values ('inspection-media', path_for('BB-112', 1, 'after-1700000000030.jpg'))$$, 'allowed');
+select t('   (unscoped admin can read it)', :H, $$select 1 from storage.objects where name like (select id::text from units where unit_code = 'BB-112') || '/%'$$, 'allowed');
+insert into admin_scopes select id, 'Founders Hall' from profiles where email = 'housing.admin@university.edu';
+select t('10n scoped admin reads another building''s rooms', :H, $$select 1 from units where building_name = 'Bluebonnet Hall'$$, 'no-rows');
+select t('10o scoped admin reads another building''s items', :H, $$select 1 from item_dashboard where building_name = 'Bluebonnet Hall'$$, 'no-rows');
+select t('10p scoped admin assesses another building''s item', :H, $$update inspection_items set condition_status = 'NO_CHANGE' where unit_id = (select id from public.units_all where unit_code = 'BB-118')$$, 'no-rows|blocked');
+select t('10q scoped admin opens move-out in another building', :H, $$select open_move_out((select id from public.units_all where unit_code = 'BB-118'))$$, 'blocked');
+select t('10r scoped admin creates a room in another building', :H, $$insert into units (unit_code, building_name, room_number, semester, assigned_student_name, assigned_student_email) values ('BB-900', 'Bluebonnet Hall', '900', 'Fall 2026', 'X', 'x@university.edu')$$, 'blocked');
+select t('10s scoped admin reads another building''s files', :H, $$select 1 from storage.objects where name like (select id::text from public.units_all where unit_code = 'BB-112') || '/%'$$, 'no-rows');
+select t('10t scoped admin widens their own scope', :H, $$insert into admin_scopes select id, 'Bluebonnet Hall' from profiles where email = 'housing.admin@university.edu'$$, 'blocked');
+select t('10u LEGIT scoped admin still works in their own building', :H, $$select 1 from item_dashboard where building_name = 'Founders Hall'$$, 'allowed');
+select t('10v LEGIT scoped admin creates a room in their building', :H, $$insert into units (unit_code, building_name, room_number, semester, assigned_student_name, assigned_student_email) values ('FH-900', 'Founders Hall', '900', 'Fall 2026', 'X', 'x@university.edu')$$, 'allowed');
+select t('10w ...and the dashboard totals count only that building (3 rooms)', :H, $$select 1 where (dashboard_summary()->>'units')::int = 3$$, 'allowed');
+rollback;
+
+begin;
+select t('10x LEGIT admin: dashboard totals (4 rooms, 16 items, $205 saved)', :H, $$select 1 where (dashboard_summary()->>'units')::int = 4 and (dashboard_summary()->>'items')::int = 16 and (dashboard_summary()->>'saved')::numeric = 205$$, 'allowed');
+select t('10y LEGIT admin: a page of rooms, searched by student name', :H, $$select 1 where (units_overview('priya', 12, 0)->>'total')::int = 1 and (units_overview(null, 2, 0)->>'total')::int = 4 and json_array_length(units_overview(null, 2, 0)->'units') = 2$$, 'allowed');
+select t('10z student: the same queries only ever count their own room', :J, $$select 1 where (dashboard_summary()->>'units')::int = 1 and (units_overview(null, 50, 0)->>'total')::int = 1$$, 'allowed');
+select t('10aa signed-out visitor calls dashboard_summary()', null, $$select dashboard_summary()$$, 'blocked');
+select t('10ab student calls security_status()', :J, $$select security_status()$$, 'blocked');
+select t('10ac LEGIT admin: security_status() reports what is installed', :H, $$select 1 where (security_status()->>'server_fingerprints')::boolean and (security_status()->>'admin_mfa_required')::boolean and (security_status()->>'audit_chain')::boolean and (security_status()->'migrations')::jsonb ? '010_scale_and_safety'$$, 'allowed');
+select t('10ad admin without the second factor calls security_status()', 'housing.admin@university.edu#aal1', $$select security_status()$$, 'blocked');
+rollback;

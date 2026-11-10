@@ -44,6 +44,8 @@ async function fakeSupabase(route) {
     return send(200, session(email, 'aal1'));
   }
   if (p === '/auth/v1/logout') return send(204);
+  // Public project settings (what the dashboard's setup checks read): this fake project is set up badly on purpose.
+  if (p === '/auth/v1/settings') return send(200, { disable_signup: false, mailer_autoconfirm: true, external: {} });
   if (!u) return send(401, { code: 401, error_code: 'no_authorization', msg: 'not signed in' });
   if (p === '/auth/v1/user') return send(200, session(me, 'aal1').user);
   if (p === '/auth/v1/factors' && m === 'POST') {
@@ -65,6 +67,8 @@ async function fakeSupabase(route) {
     }
   }
   if (p === '/rest/v1/profiles') return send(200, [{ id: u.id, full_name: u.full_name, email: me, role: u.role }]);
+  if (p === '/rest/v1/rpc/security_status') return send(200, { hardening: true, server_fingerprints: true, admin_mfa_required: false, audit_chain: true, seed_photos_fingerprinted: true, migrations: ['010_scale_and_safety'], storage: { files: 0, bytes: 0, unreferenced_files: 0, unreferenced_bytes: 0 } });
+  if (p === '/rest/v1/rpc/dashboard_summary') return send(200, { units: 7, inspected: 3, items: 28, saved: '205.00', billable: '130.00', disputes: 1, by_building: [], by_status: [], buildings: [], zones: [], unit_codes: [] });
   if (p.startsWith('/rest/v1/')) return send(200, []); // no rooms, no rows: enough to render the pages
   return send(404, { msg: `fake: no route ${m} ${p}` });
 }
@@ -117,6 +121,13 @@ async function fakeSupabase(route) {
     await dialog.getByText('That code is not right').waitFor(); check('Wrong authenticator code is rejected', true);
     await type(TOTP); await page.waitForURL(/\/admin$/); await page.getByText('Housing dashboard').waitFor();
     check('Correct code finishes setup and opens the dashboard', users['housing.admin@university.edu'].factors[0].status === 'verified');
+    const setup = page.getByTestId('setup-checks');
+    await setup.waitFor();
+    const warned = await setup.innerText();
+    await page.screenshot({ path: path.join(S, 'M2-setup-checks.png') });
+    check('Dashboard warns that two-factor is not enforced by the database yet (007 not run)', /two-factor is not enforced/.test(warned), warned.slice(0, 200));
+    check('...that email confirmation is off, and that sign-ups are open', /Email confirmation is off/.test(warned) && /Sign-ups are open/.test(warned), warned.slice(0, 300));
+    check('Dashboard totals come from the database summary (7 rooms, $205.00 saved)', /7 rooms/.test(await page.locator('main').innerText()) && (await page.locator('[data-testid="kpi-$ saved by students"]').innerText()).trim() === '$205.00');
 
     // Admin, next time: just the code
     await signOut();

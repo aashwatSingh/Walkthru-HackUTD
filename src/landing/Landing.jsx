@@ -66,22 +66,22 @@ function SiteHeader() {
     <header className="sticky top-0 z-40 border-b border-line bg-void/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
         <Logo />
-        <nav className="hidden items-center gap-1 text-[13.5px] font-medium md:flex" aria-label="Sections">
+        <nav className="hidden items-center gap-1 whitespace-nowrap text-[13.5px] font-medium lg:flex" aria-label="Sections">
           {NAV.map((l) => (
             <a key={l.id} href={`#${l.id}`} aria-current={active === l.id ? 'true' : undefined}
               className={`rounded-md px-3 py-1.5 transition-[background-color,color] duration-150 ${active === l.id ? 'bg-cyan-400/[0.12] text-neon' : 'text-muted-foreground hover:bg-white/[0.05] hover:text-foreground'}`}>{l.label}</a>
           ))}
         </nav>
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="hidden items-center gap-2 lg:flex">
           {!signedIn && <Link to="/login" className="btn btn-ghost">Sign in</Link>}
           {cta}
         </div>
-        <button className="btn btn-ghost btn-icon size-10 md:hidden" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <button className="btn btn-ghost btn-icon size-10 lg:hidden" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </button>
       </div>
       {open && (
-        <nav className="animate-fade border-t border-line md:hidden" aria-label="Sections">
+        <nav className="animate-fade border-t border-line lg:hidden" aria-label="Sections">
           <div className="mx-auto flex max-w-7xl flex-col gap-1 px-5 py-4">
             {NAV.map((l) => (
               <a key={l.id} href={`#${l.id}`} onClick={() => setOpen(false)} className="rounded-md px-3 py-3 text-lg font-semibold transition-colors hover:bg-cyan-400/10 hover:text-neon">{l.label}</a>

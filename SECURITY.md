@@ -16,6 +16,14 @@ Each fix has a test that fails on the old code. Run them: `npm test`, `npm run t
 | 7 | Low | No security headers (the site could be framed; no Content-Security-Policy). | `vercel.json`: CSP, no framing, nosniff, referrer and permissions policies. |
 | 8 | Low | A crafted `?next=` link broke login; error messages showed internal details to students; room emails with capitals never matched. | `safeNext()`; plain messages from `photo-check`; emails stored in lowercase. |
 | 9 | Medium | **Fingerprints came from the student's browser.** The database checked that a fingerprint looked right, not that it matched the file. A student calling the API directly could register a wrong one, then point at the admin screen's "Mismatch: file changed since upload" as proof that housing altered the photo. | `008` + the `register-evidence` Edge Function: the server downloads the stored file and computes SHA-256 itself. Nobody using the API can write a file path, type or fingerprint any more (a student can still remove a photo and edit notes). See "How a photo is registered now". |
+| 10 | Medium | **No limit on the calls that cost money or memory.** A signed-in user could call `register-evidence` (downloads up to 50 MB each time) or `ai-review` (spends NVIDIA credits) in a loop. | `010`: a rate limiter in the database. 30 registrations per 10 minutes per student, 20 reviews per hour per admin; over that the function answers 429 before doing any work. |
+| 11 | Medium | **The audit log could be rewritten** by anything holding the service-role key, without a trace. | `010`: the log is append-only for every API role, and each entry carries the SHA-256 of the room's previous entry. The newest hash (the "record seal") and every photo's full fingerprint are printed on the inspection report, so a copy the student keeps pins the history housing holds. |
+| 12 | Medium | **Every admin saw every building.** | `010`: `admin_scopes`. An admin listed there sees and acts on those buildings only, in the database, the storage bucket and `ai-review`. An admin with no rows there keeps full access. |
+| 13 | Medium | **A deployed site with no database settings silently ran as the sample-data demo**: inspections would be saved nowhere. | A production build without `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` shows "not connected to its database" instead of the app. A deliberate demo sets `VITE_DEMO_MODE=true`. |
+| 14 | Low | **Risky project settings were invisible** (open sign-ups, email confirmation off, a skipped migration, the demo password still set). | The admin dashboard checks them on every load and lists what is wrong, with the fix. |
+| 15 | Low | **The dashboard loaded every item into the browser** and asked for AI results with every id in one URL, which fails at a few thousand items. | Totals and chart data are aggregated in the database; the table and the room cards load one page at a time, with filtering, search and sorting in the query (`010`). |
+| 16 | Low | **Room codes collided** for buildings with the same initials (Founders Hall, Fairview Hall). | The next free code is used (`FAIH-304B`, `FH2-304B`). |
+| 17 | Low | **Tests only ran when someone remembered**, and **Edge Functions pulled the newest library version at deploy time.** | A GitHub Action runs all four suites on every pull request; the functions import exact versions. |
 
 ## What you need to do
 
@@ -42,6 +50,44 @@ Each fix has a test that fails on the old code. Run them: `npm test`, `npm run t
    "Fingerprint matches upload". If the wizard says "Could not save the photo", open the function's log
    (Edge Functions → register-evidence → Logs); it names what is missing.
 
+6. Install the scale and safety update (fixes 10 to 15). In this order; nothing breaks in between, because
+   `010` only adds things and the functions work with or without it:
+   1. Run `supabase/migrations/010_scale_and_safety.sql` in the SQL Editor. It should print `scale_and_safety_installed = true`.
+   2. Redeploy the two functions that changed:
+      ```bash
+      npx supabase functions deploy register-evidence --no-verify-jwt --project-ref <project-ref>
+      ```
+      ```bash
+      npx supabase functions deploy ai-review --no-verify-jwt --project-ref <project-ref>
+      ```
+   3. Deploy the site (merge to the branch Vercel builds).
+
+   Then open the admin dashboard. If a red "setup problems" box appears at the top, do what it says: it reads
+   the project's real settings.
+7. In Supabase → Authentication, turn **off** "Allow new users to sign up" and keep "Confirm email" **on**.
+   Rooms are matched by email address, so only housing should be able to create accounts.
+
+## Admins for one building
+
+By default an admin sees every building. To limit one to a building, run this in the SQL Editor (once per
+building they should see):
+
+```sql
+insert into admin_scopes select id, 'Founders Hall' from profiles where email = 'north.campus@university.edu';
+```
+
+Delete their rows from `admin_scopes` to give full access back. There is no screen for this yet, on purpose:
+it cannot be changed through the API, by anyone.
+
+## The record seal
+
+Every change to a room or one of its items adds an entry to the audit log. Since `010` each entry includes the
+SHA-256 of the room's previous entry, so entries cannot be altered, removed or reordered without breaking every
+later one. `select verify_audit_chain('<unit id>');` re-computes a room's chain, and the inspection report
+prints the newest hash as the "record seal", next to the full fingerprint of every photo. Someone with the
+database password could still rebuild a whole chain, but not one that matches a report a student already saved.
+Entries written before `010` are not part of a chain.
+
 ## How a photo is registered now
 
 1. The browser uploads the file to Storage. The storage rules from `006` still apply: only into that item's
@@ -66,7 +112,12 @@ can do through the app or the API.
   does not recompute them. Unlocked ones can be retaken; for locked ones, a mismatch is not proof of tampering.
 - **"Live camera only" is a rule of the page, not the server.** Someone calling the API directly can upload any JPEG.
   The fingerprint proves the stored file has not changed since upload, not that it shows the room.
-- **Whoever holds the service-role key or the database password can still change anything**, fingerprints included.
-  That is Supabase project access, not the app.
-- **Rooms are matched by email**, not user id. Keep sign-ups off and email confirmation on.
+- **Whoever holds the database password can still change anything**, fingerprints included. Since `010` they cannot
+  do it unnoticed for a room whose report someone else has kept (see "The record seal").
+- **Stored files are kept forever.** Nothing deletes retakes, abandoned uploads or old semesters, and a video can be
+  50 MB. The dashboard shows how much is stored and how much of it no checklist item points to. Deleting anything
+  is a policy decision (how long must evidence be kept?) that has not been made.
+- **Rate limits are per signed-in user**, not per network address, and `photo-check` keeps its own per-photo cap.
+- **Rooms are matched by email**, not user id. Keep sign-ups off and email confirmation on (step 7); the dashboard
+  warns if either is wrong.
 - The demo students share one password while `VITE_DEMO_PASSWORD` is set.

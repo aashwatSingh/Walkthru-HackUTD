@@ -23,7 +23,12 @@ export const skipSecondFactor = (...a) => impl.skipSecondFactor(...a);
 export const getMyUnits = (...a) => impl.getMyUnits(...a);
 export const getUnitByCode = (...a) => impl.getUnitByCode(...a);
 export const getInspectionItems = (...a) => impl.getInspectionItems(...a);
-export const getDashboardRows = (...a) => impl.getDashboardRows(...a);
+// Admin dashboard, aggregated and paged in the database:
+export const getDashboardSummary = (...a) => impl.getDashboardSummary(...a); // totals, chart data, filter options
+export const getDashboardPage = (...a) => impl.getDashboardPage(...a);       // ({ filters, search, sort, page, pageSize }) → { rows, total }
+export const getUnitsPage = (...a) => impl.getUnitsPage(...a);               // ({ search, page, pageSize }) → { units, total }
+export const getSetupChecks = (...a) => impl.getSetupChecks(...a);           // → { checks: [{ level, text }], storage }
+export const getAuditHead = (...a) => impl.getAuditHead(...a);               // (unitId) → { ok, entries, head } | null
 
 export const uploadStudentMedia = (...a) => impl.uploadStudentMedia(...a);
 // (itemId, phase, path): the server fingerprints the uploaded file and puts it on the item. uploadStudentMedia calls it.

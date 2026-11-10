@@ -17,16 +17,10 @@ function Key({ color, on, dim, onClick, children, count }) {
 }
 
 // Both charts are filters: click a building's bars or a status slice and the table below follows.
-export default function Charts({ rows, filters, onFilter }) {
-  const byBuilding = Object.values(
-    rows.reduce((acc, r) => {
-      const b = (acc[r.building_name] ??= { building: r.building_name, waived: 0, billable: 0 });
-      b.waived += Number(r.waived_amount || 0);
-      b.billable += Number(r.billable_amount || 0);
-      return acc;
-    }, {}),
-  );
-  const byStatus = STATUSES.map((s) => ({ key: s, name: STATUS_META[s].label, value: rows.filter((r) => r.condition_status === s).length })).filter((d) => d.value > 0);
+export default function Charts({ summary, filters, onFilter }) {
+  const byBuilding = summary.by_building;
+  const countOf = (key) => Number(summary.by_status.find((s) => s.key === key)?.value || 0);
+  const byStatus = STATUSES.map((s) => ({ key: s, name: STATUS_META[s].label, value: countOf(s) })).filter((d) => d.value > 0);
   const reviewed = byStatus.reduce((n, d) => n + d.value, 0);
   const toggle = (key, value) => onFilter({ [key]: filters[key] === value ? undefined : value });
   const pick = (d, field) => d?.payload?.[field] ?? d?.[field] ?? d?.payload?.payload?.[field];
@@ -81,7 +75,7 @@ export default function Charts({ rows, filters, onFilter }) {
             </PieChart>
           </ResponsiveContainer>
           <p className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center" aria-hidden>
-            <span className="font-mono text-3xl font-semibold tabular-nums">{filters.status ? rows.filter((r) => r.condition_status === filters.status).length : reviewed}</span>
+            <span className="font-mono text-3xl font-semibold tabular-nums">{filters.status ? countOf(filters.status) : reviewed}</span>
             <span className="text-[11.5px] text-muted-foreground">{filters.status ? STATUS_META[filters.status]?.short : 'reviewed'}</span>
           </p>
         </div>

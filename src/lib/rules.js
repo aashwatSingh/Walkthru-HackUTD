@@ -28,6 +28,26 @@ export const homeFor = (profile) => (profile?.role === 'admin' ? '/admin' : '/my
 // Where to go after login. Only paths on this site: "/inspect/FH-210A" yes; "//evil.com", "https://…" and "/\\evil.com" no.
 export const safeNext = (next) => (typeof next === 'string' && /^\/(?![/\\])/.test(next) ? next : null);
 
+// Room codes to try for a new unit, best first: building initials + room ("FH-304B"). Two buildings can share
+// initials (Founders Hall, Fairview Hall), so the later ones are longer or numbered ("FAIH-304B", "FH2-304B").
+export function unitCodeCandidates(buildingName, roomNumber) {
+  const words = String(buildingName).trim().split(/\s+/).filter(Boolean);
+  const clean = (s) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const room = clean(String(roomNumber));
+  const initials = clean(words.map((w) => w[0]).join('')) || 'U';
+  const longer = clean((words[0] || '').slice(0, 3) + words.slice(1).map((w) => w[0]).join(''));
+  const list = [`${initials}-${room}`];
+  if (longer && longer !== initials) list.push(`${longer}-${room}`);
+  for (let n = 2; n <= 9; n++) list.push(`${initials}${n}-${room}`);
+  return list;
+}
+
+// Search text that is safe to put inside a PostgREST filter (and short enough to be a search, not a payload).
+export const cleanSearch = (text) => String(text ?? '').replace(/[,()*%"\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+
+// Which column each sortable header of the admin table sorts by.
+export const SORT_COLUMNS = { student: 'assigned_student_name', room: 'unit_code', item: 'item_name', in: 'before_captured_at', out: 'after_captured_at', status: 'condition_status', fine: 'estimated_fine' };
+
 // Filters for the admin table (also used by the mock database).
 export function applyFilters(rows, { building, unitCode, zone, status } = {}) {
   return rows.filter(

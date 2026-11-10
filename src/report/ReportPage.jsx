@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Printer } from 'lucide-react';
+import { Link2, Printer, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import AppShell from '../components/AppShell.jsx';
 import { EvidenceFrame, MediaView, Spinner, StatusBadge } from '../components/ui.jsx';
-import { getAiReviews, getInspectionItems, getUnitByCode } from '../lib/dbService.js';
-import { fmtUtc, money, shortHash } from '../lib/format.js';
+import { getAiReviews, getAuditHead, getInspectionItems, getUnitByCode } from '../lib/dbService.js';
+import { fmtUtc, money } from '../lib/format.js';
 
 // /report/:unitCode: a print-optimised record of the whole room. "Download PDF" = the browser's Save as PDF.
 export default function ReportPage() {
@@ -14,6 +14,7 @@ export default function ReportPage() {
   const [unit, setUnit] = useState(undefined);
   const [items, setItems] = useState([]);
   const [ai, setAi] = useState({});
+  const [chain, setChain] = useState(null); // { ok, entries, head }: the room's audit chain, where available
 
   useEffect(() => {
     (async () => {
@@ -22,6 +23,7 @@ export default function ReportPage() {
       if (!u) return;
       const list = await getInspectionItems(u.id);
       setItems(list);
+      getAuditHead(u.id).then(setChain).catch(() => {});
       if (profile.role === 'admin') setAi(await getAiReviews(list.map((i) => i.id)));
     })().catch(() => setUnit(null));
   }, [unitCode, profile.role]);
@@ -62,7 +64,8 @@ export default function ReportPage() {
                     </EvidenceFrame>
                     <figcaption className="mt-1.5 font-mono text-[10.5px] text-soft">
                       <b className="font-sans text-xs">{p === 'before' ? 'Move-in' : 'Move-out'}</b> · {fmtUtc(i[`${p}_captured_at`])}
-                      {i[`${p}_sha256`] && <> · SHA-256 <code className="text-neon">{shortHash(i[`${p}_sha256`])}</code></>}
+                      {/* the whole fingerprint: a printed copy of this page pins each file */}
+                      {i[`${p}_sha256`] && <span className="mt-0.5 block break-all">SHA-256 <code className="text-neon">{i[`${p}_sha256`]}</code></span>}
                       {i[`${p}_notes`] && <span className="mt-0.5 block font-sans text-xs">“{i[`${p}_notes`]}”</span>}
                     </figcaption>
                   </figure>
@@ -83,6 +86,14 @@ export default function ReportPage() {
           <p>Total charges: <b className="font-mono text-lg text-blush">{money(billable)}</b></p>
           <p>Waived (pre-existing): <b className="font-mono text-lg text-neon">{money(waived)}</b></p>
           <p className="fact ml-auto">Generated {fmtUtc(new Date().toISOString())}</p>
+          {chain && (
+            <p className={`basis-full break-all font-mono text-[10.5px] ${chain.ok ? 'text-soft' : 'text-blush'}`}>
+              {chain.ok ? <Link2 size={12} className="mr-1 inline -mt-0.5" aria-hidden /> : <ShieldAlert size={12} className="mr-1 inline -mt-0.5" aria-hidden />}
+              {chain.ok
+                ? <>Change history: {chain.entries} entries, unbroken. Record seal <code className="text-neon">{chain.head}</code>. Keep this page: the seal changes if any earlier entry is ever altered.</>
+                : <>Change history: the chain of {chain.entries} entries does not verify. An entry was altered after it was written.</>}
+            </p>
+          )}
         </footer>
       </article>
     </AppShell>

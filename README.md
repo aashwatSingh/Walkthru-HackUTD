@@ -27,7 +27,7 @@ In mock mode a **"use a sample photo"** button replaces the camera (real mode ha
 
 ## Run it on real Supabase
 
-1. In Supabase, run `supabase/migrations/001_schema.sql`, `002_policies.sql`, `003_seed.sql` (one query each, in order), create the 5 demo users in Authentication → Users (Auto Confirm), then run `004_demo_roles.sql`, `005_evidence_paths.sql`, `006_hardening.sql` and `008_server_fingerprints.sql`. Run `007_admin_mfa.sql` last, after the housing admin has set up two-factor on the site (see [`SECURITY.md`](SECURITY.md)).
+1. In Supabase, run `supabase/migrations/001_schema.sql`, `002_policies.sql`, `003_seed.sql` (one query each, in order), create the 5 demo users in Authentication → Users (Auto Confirm), then run `004_demo_roles.sql`, `005_evidence_paths.sql`, `006_hardening.sql`, `008_server_fingerprints.sql` and `010_scale_and_safety.sql`. Run `007_admin_mfa.sql` last, after the housing admin has set up two-factor on the site (see [`SECURITY.md`](SECURITY.md)).
 2. `cp .env.example .env.local` and fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_DEMO_PASSWORD`. Leave `VITE_PUBLIC_SITE_URL` empty unless you print QR codes from your laptop (then: your deployed link, never localhost).
 3. Check NVIDIA with one command: `node --no-warnings scripts/verify-nvidia.mjs` (needs `NVIDIA_API_KEY`), then deploy the three Edge Functions (`register-evidence` is required: photo uploads go through it; the two Nemotron ones are the AI): see [`supabase/functions/README.md`](supabase/functions/README.md).
 4. Run `supabase/migrations/009_seed_photo_fingerprints.sql` so the seed photos show the green integrity badge. (`node scripts/hash-seed.mjs` regenerates that SQL: re-run it if you replace a photo in `public/seed/`.)
@@ -37,7 +37,7 @@ The seed photos in `public/seed/` are AI-generated, realistic stand-ins (a door,
 ## Deploy (this is what gives you a link that works on a phone)
 
 1. vercel.com → **Add New → Project** → import this repo. Vercel detects Vite; keep its build settings.
-2. Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_DEMO_PASSWORD`. Leave `VITE_PUBLIC_SITE_URL` out: QR codes then use the deployed address automatically.
+2. Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_DEMO_PASSWORD`. (Without the first two a deployed site shows "not connected to its database"; for a sample-data demo with no database, set `VITE_DEMO_MODE=true` instead.) Leave `VITE_PUBLIC_SITE_URL` out: QR codes then use the deployed address automatically.
 3. Deploy, then open the short **Production** link (Project → Domains, like `https://your-project.vercel.app`).
 4. Tell the Edge Functions where the sample photos live: `npx supabase secrets set PUBLIC_SITE_URL=https://your-project.vercel.app --project-ref <ref>`.
 
@@ -52,12 +52,12 @@ If it won't open on a phone:
 
 | Command | What it checks | Needs |
 |---|---|---|
-| `npm test` | Nemotron client (one retry, shared time limit, agent loop) and the prompt-injection and redirect guards | Node 22.18+ |
-| `npm run test:e2e` | 83 browser checks under the production security headers: landing-page demos, student wizard, admin dashboard, comparator, Nemotron panel, disputes, QR codes that scan (also printed), report, admin password, and live sign-in with a real authenticator flow (fake Supabase) | first time: `npx playwright install chromium` |
-| `npm run test:functions` | the real `ai-review`, `photo-check` and `register-evidence` code under Deno against a fake Supabase + NVIDIA (51 checks) | Deno (fetched by npx if missing); port 8000 free |
-| `npm run test:sql` | 102 attacks and must-work flows against every migration (backdating, tampering, privileges, admin MFA, server-computed fingerprints) | `psql` + a local Postgres (`SQL_TEST_URL`) |
+| `npm test` | Nemotron client (one retry, shared time limit, agent loop), the prompt-injection and redirect guards, room codes and search text | Node 22.18+ |
+| `npm run test:e2e` | 90 browser checks under the production security headers: a build with no database refuses to start, landing-page demos, student wizard, admin dashboard, comparator, Nemotron panel, disputes, QR codes that scan (also printed), report, admin password, and live sign-in with a real authenticator flow (fake Supabase) | first time: `npx playwright install chromium` |
+| `npm run test:functions` | the real `ai-review`, `photo-check` and `register-evidence` code under Deno against a fake Supabase + NVIDIA (56 checks) | Deno (fetched by npx if missing); port 8000 free |
+| `npm run test:sql` | 137 attacks and must-work flows against every migration (backdating, tampering, privileges, admin MFA, server-computed fingerprints, rate limits, the audit chain, building-scoped admins) | `psql` + a local Postgres (`SQL_TEST_URL`) |
 
-No accounts or keys: every suite runs in mock mode or against local fakes.
+No accounts or keys: every suite runs in mock mode or against local fakes. GitHub runs all four on every pull request (`.github/workflows/test.yml`).
 
 ## Where things are
 

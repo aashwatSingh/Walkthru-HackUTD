@@ -99,6 +99,12 @@ try {
     check('Text model never receives photos', s.nimCalls.filter((c) => c.model === 'nvidia/test-text').every((c) => c.images === 0));
     check('Results are saved (4 item reviews + 1 unit report)', s.reviews.filter((x) => x.kind === 'DAMAGE_DIFF').length === 4 && s.reports.length === 1);
 
+    check('Each run is counted against the admin\'s hourly allowance', s.rateCalls.length === 1 && s.rateCalls[0].p_action === 'ai-review' && s.rateCalls[0].p_subject === 'admin-1', JSON.stringify(s.rateCalls));
+    await ctl({ reset: true, rateLimited: true });
+    r = await post('admin-token', { unitId: 'u1' });
+    s = await ctl();
+    check('Over the hourly limit: 429, and NVIDIA is not called', r.status === 429 && s.nimCalls.length === 0, `${r.status} ${s.nimCalls.length}`);
+
     await ctl({ reset: true, agent: 'notools' });
     r = await post('admin-token', { unitId: 'u1' });
     check('Model without tool calling → fixed pipeline with a summary', r.body.mode === 'pipeline' && /tools/.test(r.body.agent?.fallback_reason ?? '') && r.body.memo?.admin_summary?.length > 0,
@@ -217,6 +223,16 @@ try {
     await refused('A "photo" over 5 MB: 413', 'student-token', { itemId: 'r1', phase: 'before', path: 'u3/r1/before-1700000000008.jpg' }, 413, /5 MB/);
     await refused('Missing path: 400', 'student-token', { itemId: 'r1', phase: 'before' }, 400);
     await refused('A phase that does not exist: 400', 'student-token', { itemId: 'r1', phase: 'during', path: P1 }, 400);
+
+    // Rationing: each call downloads a file
+    await ctl({ rateLimited: true });
+    const downloadsBefore = (await ctl()).downloads.length;
+    await refused('Over the rate limit: 429', 'student-token', { itemId: 'r1', phase: 'before', path: 'u3/r1/before-1700000000006.jpg' }, 429, /Too many uploads/);
+    check('...and the file is not downloaded', (await ctl()).downloads.length === downloadsBefore);
+    await ctl({ rateLimited: 'missing' });
+    r = await post('student-token', { itemId: 'r1', phase: 'before', path: 'u3/r1/before-1700000000005.jpg' });
+    await ctl({ rateLimited: false });
+    check('Limiter not installed yet (migration 010 not run): uploads still work', r.status === 200, `${r.status} ${JSON.stringify(r.body)}`);
 
     // The database has the last word (e.g. the student locked the inspection while the file was being hashed).
     await ctl({ registerError: 'Move-in inspection is locked' });

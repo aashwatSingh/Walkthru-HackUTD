@@ -10,13 +10,11 @@ const TONE = {
 };
 
 // Four readouts that are also controls: three of them filter the item table to the rows behind the number.
-export default function KpiCards({ units, rows, status, onStatus, onRooms }) {
-  const inspected = units.filter((u) => u.inspection_phase !== 'MOVE_IN_OPEN').length;
-  const saved = rows.reduce((s, r) => s + Number(r.waived_amount || 0), 0);
-  const disputes = rows.filter((r) => r.condition_status === 'DISPUTE_UNDER_REVIEW').length;
-  const billable = rows.reduce((s, r) => s + Number(r.billable_amount || 0), 0);
+// `summary` comes from the database (dashboard_summary), so the totals cover every room, not one page of them.
+export default function KpiCards({ summary, status, onStatus, onRooms }) {
+  const { inspected, saved, disputes, billable } = summary;
   const cells = [
-    { label: 'Units inspected', value: inspected, sub: `of ${units.length} rooms`, tone: 'violet', lit: 'violet' },
+    { label: 'Units inspected', value: inspected, sub: `of ${summary.units} rooms`, tone: 'violet', lit: 'violet' },
     { label: '$ saved by students', value: money(saved), sub: 'pre-existing damage, waived', tone: 'cyan', lit: '', filter: 'PRE_EXISTING_DAMAGE' },
     { label: 'Active disputes', value: disputes, sub: 'waiting on housing', tone: 'amber', lit: 'amber', filter: 'DISPUTE_UNDER_REVIEW' },
     { label: 'Confirmed billable', value: money(billable), sub: 'new damage charges', tone: 'rose', lit: 'rose', filter: 'NEW_DAMAGE_BILLABLE' },
