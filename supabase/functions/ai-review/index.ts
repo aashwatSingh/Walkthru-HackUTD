@@ -14,7 +14,7 @@ import { runAgent, type TraceStep } from '../_shared/agent.ts';
 import { json, preflight } from '../_shared/cors.ts';
 import { callBudget, nemotron, TEXT_MODEL, VLM_MODEL } from '../_shared/nemotron.ts';
 import { AGENT_SYSTEM, agentTask, applyFees, memoMessages, normalizeMemo, parseModelJson } from '../_shared/prompts.mjs';
-import { loadImage, requireUser, serviceClient } from '../_shared/supabase.ts';
+import { loadImage, requireUser, serviceClient, withinRateLimit } from '../_shared/supabase.ts';
 import { buildReviewTools, isPhotoPair, type Item, type Review } from '../_shared/review-tools.ts';
 import { compareImages, visionMode } from '../_shared/vision.ts';
 
@@ -26,6 +26,7 @@ const CONCURRENCY = Math.max(1, Number(Deno.env.get('AI_REVIEW_CONCURRENCY') ?? 
 //   - no new agent round starts unless it can finish by AGENT_ROUNDS_MS (a round = planning call + its tools)
 //   - EVERY Nemotron call (agent, vision, retries, the fallback memo) ends by CALLS_END_MS, even ones already running
 //   - what's left (saving results, the response) has 35 s of slack
+const MAX_RUNS_PER_HOUR = 20;
 const AGENT_ROUNDS_MS = 100_000;
 const CALLS_END_MS = 115_000;
 
@@ -63,7 +64,8 @@ Deno.serve(async (req) => {
   if (!unitId) return json({ error: 'Expected { unitId }' }, 400);
 
   const admin = serviceClient();
-  const { data: unit, error: unitError } = await admin
+  // Read the unit AS the caller: an admin scoped to other buildings (migration 010) gets "not found" here.
+  const { data: unit, error: unitError } = await auth.userClient
     .from('units')
     .select('id, unit_code, building_name, room_number, semester, assigned_student_name, inspection_phase, move_in_locked_at, move_out_locked_at')
     .eq('id', unitId)
@@ -72,6 +74,10 @@ Deno.serve(async (req) => {
   if (!unit) return json({ error: 'Unit not found' }, 404);
   if (unit.inspection_phase !== 'COMPLETED') {
     return json({ error: 'Run the review after the student submits move-out' }, 409);
+  }
+  // Every run spends NVIDIA credits: ration them per admin.
+  if (!(await withinRateLimit(admin, auth.user.id, 'ai-review', MAX_RUNS_PER_HOUR, 3600))) {
+    return json({ error: 'Review limit reached for this hour. Saved results are still shown; try again later.' }, 429);
   }
 
   const { data: rows, error: itemsError } = await admin

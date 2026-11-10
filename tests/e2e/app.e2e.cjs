@@ -21,6 +21,8 @@ let pageRef; const step = async (name, fn) => { try { await fn(); } catch (e) { 
   page.on('console', (m) => { if (m.type() === 'error' && !/getUserMedia|Failed to load resource/.test(m.text())) problems.push('console: ' + m.text()); });
   const text = async (sel) => (await page.locator(sel).first().innerText()).trim();
   const kpi = (label) => text(`[data-testid="kpi-${label}"]`);
+  // The table is filtered by the database now: wait for it to show n rows (true) or give up (false).
+  const rowsAre = (n) => page.waitForFunction((want) => document.querySelectorAll('[data-testid="item-row"]').length === want && !document.querySelector('tbody[aria-busy="true"]'), n, { timeout: 6000 }).then(() => true, () => false);
   const switchTo = async (name) => { await page.getByRole('button', { name, exact: true }).first().click(); await page.waitForLoadState('networkidle'); };
 
   // ── 0. landing page: the demos on it are real controls
@@ -128,27 +130,32 @@ let pageRef; const step = async (name, fn) => { try { await fn(); } catch (e) { 
     check('KPI: active disputes = 1', (await kpi('Active disputes')) === '1', await kpi('Active disputes'));
     check('KPI: confirmed billable = $130.00', (await kpi('Confirmed billable')) === '$130.00', await kpi('Confirmed billable'));
     check('Two charts rendered', (await page.locator('.recharts-wrapper').count()) === 2);
-    check('16 item rows in the table', (await page.getByTestId('item-row').count()) === 16, String(await page.getByTestId('item-row').count()));
+    check('16 item rows in the table', await rowsAre(16), String(await page.getByTestId('item-row').count()));
     await page.screenshot({ path: `${S}/06-admin-dashboard.png`, fullPage: true });
     await page.locator('select[aria-label="Status"]').selectOption('DISPUTE_UNDER_REVIEW');
-    check('Status filter narrows the table to 1 row', (await page.getByTestId('item-row').count()) === 1);
+    check('Status filter narrows the table to 1 row', await rowsAre(1));
     await page.locator('select[aria-label="Status"]').selectOption('');
+    await rowsAre(16);
     await page.locator('select[aria-label="Room"]').selectOption('BB-118');
-    check('Room filter shows only BB-118 (4 rows)', (await page.getByTestId('item-row').count()) === 4);
+    check('Room filter shows only BB-118 (4 rows)', await rowsAre(4));
     await page.locator('select[aria-label="Room"]').selectOption('');
     await page.getByRole('button', { name: /Active disputes/ }).click();
-    check('Clicking the disputes number filters the table to it', (await page.getByTestId('item-row').count()) === 1);
+    check('Clicking the disputes number filters the table to it', await rowsAre(1));
     await page.getByRole('button', { name: /Clear 1 filter/ }).click();
+    await rowsAre(16);
     await page.getByLabel('Search items').fill('priya');
-    check('Search narrows the table (Priya: 4 rows)', (await page.getByTestId('item-row').count()) === 4);
+    check('Search narrows the table (Priya: 4 rows)', await rowsAre(4));
     await page.getByLabel('Search items').fill('');
+    await rowsAre(16);
     await page.getByRole('button', { name: 'Filter the table to FH-304B' }).click();
-    check('A room card filters the table to that room', (await page.getByTestId('item-row').count()) === 4);
+    check('A room card filters the table to that room', await rowsAre(4));
     await page.getByRole('button', { name: 'Filter the table to FH-304B' }).click();
+    await rowsAre(16);
     await page.getByRole('button', { name: 'Fine', exact: true }).click(); await page.getByRole('button', { name: 'Fine', exact: true }).click();
-    check('Sorting by fine puts the largest charge first', /\$120\.00/.test(await page.getByTestId('item-row').first().innerText()));
+    const top = await page.waitForFunction(() => /\$120\.00/.test(document.querySelector('[data-testid="item-row"]')?.innerText || ''), null, { timeout: 6000 }).then(() => true, () => false);
+    check('Sorting by fine puts the largest charge first', top);
     await page.getByRole('button', { name: 'Fine', exact: true }).click();
-    check('All 16 rows are back', (await page.getByTestId('item-row').count()) === 16);
+    check('All 16 rows are back', await rowsAre(16));
   });
 
   // ── 6. comparator + resolve the dispute

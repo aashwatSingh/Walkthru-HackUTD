@@ -47,7 +47,7 @@ const items = [
 // files: what Storage holds at a path. { base64 } = those bytes, { size } = that many zero bytes, null = nothing
 // stored there; any other path is the small JPEG. registerError: the database refuses the write with this message.
 const fresh = () => ({ agent: 'ok', photoNim: 'ok', photoDelayMs: 20, nimCalls: [], reviews: [], reports: [],
-  items: structuredClone(items), files: {}, downloads: [], registered: [], registerError: null });
+  items: structuredClone(items), files: {}, downloads: [], registered: [], registerError: null, rateLimited: false, rateCalls: [] });
 let state = fresh();
 
 const send = (res, status, body, headers = {}) => {
@@ -115,6 +115,13 @@ export function startFake(port) {
       return send(res, 200, state.items.filter((i) => (!q('id') || i.id === q('id')) && (!q('unit_id') || i.unit_id === q('unit_id'))
         && canSee(req, units.find((u) => u.id === i.unit_id))));
     }
+    // take_rate_limit(): service role only (migration 010). rateLimited = "over the limit"; 'missing' = not installed.
+    if (p === '/rest/v1/rpc/take_rate_limit' && req.method === 'POST') {
+      if (token(req) !== 'service-key') return send(res, 403, { code: '42501', message: 'permission denied for function take_rate_limit' });
+      state.rateCalls.push(JSON.parse(body));
+      if (state.rateLimited === 'missing') return send(res, 404, { code: 'PGRST202', message: 'Could not find the function public.take_rate_limit' });
+      return send(res, 200, !state.rateLimited);
+    }
     // register_evidence(): service role only (migration 008). Records the call and writes the row like the database.
     if (p === '/rest/v1/rpc/register_evidence' && req.method === 'POST') {
       if (token(req) !== 'service-key') return send(res, 403, { code: '42501', message: 'permission denied for function register_evidence' });
@@ -179,7 +186,7 @@ export function startFake(port) {
       if (patch.reset) state = fresh();
       if (patch.addReviews) state.reviews.push(...patch.addReviews);
       if (patch.files) Object.assign(state.files, patch.files);
-      for (const k of ['agent', 'photoNim', 'photoDelayMs', 'registerError']) if (k in patch) state[k] = patch[k];
+      for (const k of ['agent', 'photoNim', 'photoDelayMs', 'registerError', 'rateLimited']) if (k in patch) state[k] = patch[k];
       return send(res, 200, { ok: true });
     }
     if (p === '/__ctl') return send(res, 200, state);

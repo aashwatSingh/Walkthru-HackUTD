@@ -101,4 +101,6 @@ const { data, error } = await supabase.functions.invoke('ai-review', { body: { u
 
 Results are also saved to `ai_reviews` and `ai_unit_reports`, so run `ai-review` on the seed units **before judging** and the dashboard can show saved results instantly.
 
+`register-evidence` and `ai-review` are rate limited per user (migration `010`): over the limit they answer `429`. The shared file `_shared/supabase.ts` imports exact library versions; to upgrade, change the numbers there and run `npm run test:functions`.
+
 Error responses are `{ error }` with status `401` (not signed in), `403` (not an admin; for `register-evidence`, not the assigned student), `404`, `409` (wrong phase / no photo yet / the database refused), or `502` (Nemotron failed in `photo-check`). `register-evidence` also answers `400` for a path that is not this item's upload for this phase and `413` for a photo over 5 MB. It holds the whole file in memory to hash it (videos go up to the bucket's 50 MB).

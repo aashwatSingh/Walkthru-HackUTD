@@ -3,7 +3,7 @@
 import { DEMO_PASSWORD, USERS, TEMPLATE, blankItem, seedState } from './mockData.js';
 import { sha256Hex } from './hash.js';
 import { compressImage, MAX_VIDEO_BYTES } from './image.js';
-import { applyFilters } from './rules.js';
+import { SORT_COLUMNS, applyFilters, cleanSearch, unitCodeCandidates } from './rules.js';
 
 const KEY = 'walkthru-mock-v2';
 const USER_KEY = 'walkthru-mock-user';
@@ -110,12 +110,58 @@ function dashboardRows() {
     };
   }).sort((a, b) => a.unit_code.localeCompare(b.unit_code) || a.step_order - b.step_order);
 }
-export async function getDashboardRows(filters = {}) {
+// The same answers the database gives (dashboard_summary, the paged item_dashboard query, units_overview).
+export async function getDashboardSummary() {
   const p = need(me());
-  if (p.role !== 'admin') return [];
-  await sleep(80);
-  return clone(applyFilters(dashboardRows(), filters));
+  await sleep(60);
+  const rows = p.role === 'admin' ? dashboardRows() : [];
+  const units = p.role === 'admin' ? load().units : [];
+  const sum = (key) => rows.reduce((n, r) => n + Number(r[key] || 0), 0);
+  const uniq = (list) => [...new Set(list)].sort();
+  const buildings = uniq(units.map((u) => u.building_name));
+  return {
+    units: units.length, inspected: units.filter((u) => u.inspection_phase !== 'MOVE_IN_OPEN').length, items: rows.length,
+    saved: sum('waived_amount'), billable: sum('billable_amount'), disputes: rows.filter((r) => r.condition_status === 'DISPUTE_UNDER_REVIEW').length,
+    by_building: buildings.map((b) => ({ building: b, waived: rows.filter((r) => r.building_name === b).reduce((n, r) => n + Number(r.waived_amount || 0), 0), billable: rows.filter((r) => r.building_name === b).reduce((n, r) => n + Number(r.billable_amount || 0), 0) })),
+    by_status: uniq(rows.map((r) => r.condition_status)).map((key) => ({ key, value: rows.filter((r) => r.condition_status === key).length })),
+    buildings, zones: uniq(rows.map((r) => r.zone_category)), unit_codes: uniq(units.map((u) => u.unit_code)).slice(0, 500),
+  };
 }
+export async function getDashboardPage({ filters = {}, search = '', sort = null, page = 0, pageSize = 50 } = {}) {
+  const p = need(me());
+  await sleep(80);
+  if (p.role !== 'admin') return { rows: [], total: 0 };
+  const term = cleanSearch(search).toLowerCase();
+  let rows = applyFilters(dashboardRows(), filters);
+  if (term) rows = rows.filter((r) => [r.assigned_student_name, r.unit_code, r.item_name, r.building_name].some((v) => String(v).toLowerCase().includes(term)));
+  const col = sort && SORT_COLUMNS[sort.key];
+  if (col) {
+    const value = (r) => (col === 'estimated_fine' ? Number(r[col]) : r[col] ?? null);
+    rows = [...rows].sort((a, b) => {
+      const x = value(a), y = value(b);
+      if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1; // empty values last, either direction
+      return (x > y ? 1 : x < y ? -1 : 0) * sort.dir;
+    });
+  }
+  return { rows: clone(rows.slice(page * pageSize, page * pageSize + pageSize)), total: rows.length };
+}
+export async function getUnitsPage({ search = '', page = 0, pageSize = 12 } = {}) {
+  const p = need(me());
+  await sleep(60);
+  const term = cleanSearch(search).toLowerCase();
+  const s = load();
+  const hits = s.units.filter((u) => visible(p, u))
+    .filter((u) => !term || `${u.unit_code} ${u.building_name} ${u.room_number} ${u.assigned_student_name} ${u.assigned_student_email}`.toLowerCase().includes(term))
+    .sort((a, b) => a.unit_code.localeCompare(b.unit_code));
+  const withCounts = (u) => {
+    const items = s.items.filter((i) => i.unit_id === u.id);
+    return { ...u, item_count: items.length, before_count: items.filter((i) => i.before_media_path).length, after_count: items.filter((i) => i.after_media_path).length };
+  };
+  return { units: clone(hits.slice(page * pageSize, page * pageSize + pageSize).map(withCounts)), total: hits.length };
+}
+// Demo mode has no project settings to check and no audit chain.
+export const getSetupChecks = async () => ({ checks: [], storage: null });
+export const getAuditHead = async () => null;
 
 // ───────── student writes (mirror protect_inspection_items / lock_inspection) ─────────
 function editable(profile, item, phase) {
@@ -256,10 +302,12 @@ export async function updateAdminAssessment(itemId, { status, fine, comments }) 
 export async function createUnit({ buildingName, roomNumber, semester, studentName, studentEmail }) {
   const p = need(me());
   if (p.role !== 'admin') throw new Error('Only housing admins can create units');
-  const initials = buildingName.trim().split(/\s+/).map((w) => w[0]).join('').toUpperCase();
-  const code = `${initials}-${roomNumber.replace(/[^a-z0-9]/gi, '').toUpperCase()}`;
   const s = load();
-  if (s.units.some((u) => u.unit_code === code)) throw new Error(`A unit with code ${code} already exists`);
+  if (s.units.some((u) => u.building_name === buildingName.trim() && u.room_number === roomNumber.trim() && u.semester === semester.trim())) {
+    throw new Error('That room already exists for this semester.');
+  }
+  const code = unitCodeCandidates(buildingName, roomNumber).find((c) => !s.units.some((u) => u.unit_code === c));
+  if (!code) throw new Error('Could not find a free room code for this building. Rename the building or the room.');
   const unit = {
     id: `u-${code.toLowerCase()}`, unit_code: code, building_name: buildingName.trim(), room_number: roomNumber.trim(), semester: semester.trim(),
     assigned_student_name: studentName.trim(), assigned_student_email: studentEmail.trim().toLowerCase(),

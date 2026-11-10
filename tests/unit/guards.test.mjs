@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { claim, damageDiffMessages, looksLikeInstructions, normalizeDiff, applyFees, reviewNoteRisk } from '../../supabase/functions/_shared/prompts.mjs';
-import { safeNext } from '../../src/lib/rules.js';
+import { cleanSearch, safeNext, unitCodeCandidates } from '../../src/lib/rules.js';
 
 test('student text that reads like instructions to the AI is flagged', () => {
   for (const s of [
@@ -50,4 +50,24 @@ test('notes are quoted as data, capped and stripped of control characters in the
 test('after login, only paths on this site are followed', () => {
   for (const ok of ['/inspect/FH-210A', '/admin', '/report/BB-112?x=1']) assert.equal(safeNext(ok), ok);
   for (const bad of ['//evil.com', 'https://evil.com', '/\\evil.com', 'javascript:alert(1)', 'admin', '', null, undefined, 42]) assert.equal(safeNext(bad), null, String(bad));
+});
+
+test('room codes: initials first, then longer and numbered ones when two buildings share initials', () => {
+  const founders = unitCodeCandidates('Founders Hall', '304-B');
+  const fairview = unitCodeCandidates('Fairview Hall', '304-B');
+  assert.equal(founders[0], 'FH-304B');
+  assert.equal(fairview[0], 'FH-304B');           // the collision
+  assert.equal(fairview[1], 'FAIH-304B');         // ...and the way out of it
+  assert.notEqual(founders[1], fairview[1]);
+  assert.equal(new Set(fairview).size, fairview.length);
+  assert.ok(fairview.every((c) => /^[A-Z0-9]+-[A-Z0-9]+$/.test(c)), fairview.join(' '));
+  assert.equal(unitCodeCandidates('  Lakeside   Hall ', '7-C')[0], 'LH-7C');
+});
+
+test('search text cannot break out of the database filter', () => {
+  assert.equal(cleanSearch('  priya  '), 'priya');
+  assert.equal(cleanSearch('a,b)or(unit_code.eq.X'), 'a b or unit_code.eq.X');
+  assert.equal(cleanSearch('100%*"\\'), '100');
+  assert.equal(cleanSearch('x'.repeat(500)).length, 60);
+  assert.equal(cleanSearch(null), '');
 });

@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Columns2, Search, Sparkles, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Columns2, Loader2, Search, Sparkles, X } from 'lucide-react';
 import { StatusBadge } from '../components/ui.jsx';
 import { STATUS_META, fmtUtc, fmtUtcShort, money } from '../lib/format.js';
 
@@ -13,41 +12,33 @@ const Select = ({ label, value, onChange, options }) => (
   </label>
 );
 
-const STATUS_ORDER = Object.keys(STATUS_META);
+// Sorting, searching and paging all happen in the database: this component only shows one page.
 const COLUMNS = [
-  { key: 'student', label: 'Student', sort: (r) => r.assigned_student_name },
-  { key: 'room', label: 'Room', sort: (r) => r.unit_code },
-  { key: 'item', label: 'Item', sort: (r) => r.item_name },
-  { key: 'in', label: 'Move-in', sort: (r) => r.before_captured_at || '' },
-  { key: 'out', label: 'Move-out', sort: (r) => r.after_captured_at || '' },
-  { key: 'status', label: 'Status', sort: (r) => STATUS_ORDER.indexOf(r.condition_status) },
+  { key: 'student', label: 'Student', sort: true },
+  { key: 'room', label: 'Room', sort: true },
+  { key: 'item', label: 'Item', sort: true },
+  { key: 'in', label: 'Move-in', sort: true },
+  { key: 'out', label: 'Move-out', sort: true },
+  { key: 'status', label: 'Status', sort: true },
   { key: 'ai', label: 'AI suggests' },
-  { key: 'fine', label: 'Fine', sort: (r) => Number(r.estimated_fine) },
+  { key: 'fine', label: 'Fine', sort: true },
 ];
 
-export default function ItemsTable({ rows, allRows, filters, setFilters, onInspect, aiByItem = {}, search, setSearch }) {
-  const [sort, setSort] = useState(null); // { key, dir: 1 | -1 }
-  const uniq = (key) => [...new Set(allRows.map((r) => r[key]))].sort();
+export default function ItemsTable({ rows, total, grandTotal, page, pageSize, onPage, loading, options, filters, setFilters, onInspect, aiByItem = {}, search, setSearch, sort, setSort }) {
   const set = (k) => (v) => setFilters({ ...filters, [k]: v || undefined });
   const active = Object.values(filters).filter(Boolean).length + (search ? 1 : 0);
-
-  const sorted = useMemo(() => {
-    const col = sort && COLUMNS.find((c) => c.key === sort.key);
-    if (!col) return rows;
-    return [...rows].sort((a, b) => {
-      const x = col.sort(a), y = col.sort(b);
-      return (x > y ? 1 : x < y ? -1 : 0) * sort.dir;
-    });
-  }, [rows, sort]);
-
-  const cycle = (key) => setSort((s) => (s?.key !== key ? { key, dir: 1 } : s.dir === 1 ? { key, dir: -1 } : null));
+  const sorted = rows;
+  const cycle = (key) => setSort(sort?.key !== key ? { key, dir: 1 } : sort.dir === 1 ? { key, dir: -1 } : null);
+  const first = total ? page * pageSize + 1 : 0;
+  const last = Math.min(total, (page + 1) * pageSize);
+  const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <section className="panel overflow-hidden">
       <div className="space-y-3 border-b border-line p-4">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="font-semibold">Inspection items</h2>
-          <span className="fact tabular-nums" aria-live="polite">{rows.length === allRows.length ? `${allRows.length} items` : `${rows.length} of ${allRows.length} items`}</span>
+          <span className="fact flex items-center gap-1.5 tabular-nums" aria-live="polite">{loading && <Loader2 size={12} className="animate-spin text-neon" aria-hidden />}{total === grandTotal ? `${grandTotal} items` : `${total} of ${grandTotal} items`}</span>
           {active > 0 && (
             <button type="button" onClick={() => { setFilters({}); setSearch(''); }} className="animate-pop btn btn-sm btn-outline ml-auto border-cyan-400/50 text-neon">
               <X size={13} /> Clear {active} filter{active > 1 ? 's' : ''}
@@ -62,9 +53,9 @@ export default function ItemsTable({ rows, allRows, filters, setFilters, onInspe
                 className={`field pl-9 text-sm ${search ? 'border-cyan-400/70 bg-cyan-400/[0.08]' : ''}`} />
             </span>
           </label>
-          <Select label="Building" value={filters.building} onChange={set('building')} options={uniq('building_name')} />
-          <Select label="Room" value={filters.unitCode} onChange={set('unitCode')} options={uniq('unit_code')} />
-          <Select label="Zone" value={filters.zone} onChange={set('zone')} options={uniq('zone_category')} />
+          <Select label="Building" value={filters.building} onChange={set('building')} options={options.buildings} />
+          <Select label="Room" value={filters.unitCode} onChange={set('unitCode')} options={options.unitCodes} />
+          <Select label="Zone" value={filters.zone} onChange={set('zone')} options={options.zones} />
           <Select label="Status" value={filters.status} onChange={set('status')} options={Object.keys(STATUS_META).filter((s) => s !== 'NEEDS_HUMAN_REVIEW').map((s) => ({ value: s, label: STATUS_META[s].label }))} />
         </div>
       </div>
@@ -89,7 +80,7 @@ export default function ItemsTable({ rows, allRows, filters, setFilters, onInspe
               <th scope="col" className="px-3 py-1.5"><span className="sr-only">Open</span></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-line">
+          <tbody className={`divide-y divide-line transition-opacity duration-150 ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
             {sorted.map((r) => {
               const ai = aiByItem[r.id];
               return (
@@ -108,7 +99,7 @@ export default function ItemsTable({ rows, allRows, filters, setFilters, onInspe
                 </tr>
               );
             })}
-            {sorted.length === 0 && (
+            {sorted.length === 0 && !loading && (
               <tr><td colSpan={9} className="px-3 py-12 text-center text-muted-foreground">
                 No items match these filters. <button type="button" onClick={() => { setFilters({}); setSearch(''); }} className="font-semibold text-neon underline-offset-2 hover:underline">Clear them</button>
               </td></tr>
@@ -116,6 +107,16 @@ export default function ItemsTable({ rows, allRows, filters, setFilters, onInspe
           </tbody>
         </table>
       </div>
+      {total > pageSize && (
+        <nav className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-2.5" aria-label="Table pages">
+          <span className="fact tabular-nums">{first}–{last} of {total}</span>
+          <span className="flex items-center gap-1.5">
+            <button type="button" disabled={page === 0 || loading} onClick={() => onPage(page - 1)} className="btn btn-outline btn-sm"><ChevronLeft size={14} /> Previous page</button>
+            <span className="fact px-1 tabular-nums">{page + 1} / {pages}</span>
+            <button type="button" disabled={page >= pages - 1 || loading} onClick={() => onPage(page + 1)} className="btn btn-outline btn-sm">Following page <ChevronRight size={14} /></button>
+          </span>
+        </nav>
+      )}
     </section>
   );
 }

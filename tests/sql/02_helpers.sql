@@ -35,3 +35,7 @@ begin
   execute 'reset role';
   return format('%s %s -> %s%s', case when outcome = any(string_to_array(expect, '|')) then 'ok        ' else '!! HOLE   ' end, label, outcome, detail);
 end $$;
+
+-- Every unit's id and code, whoever asks (tests need ids of rooms the acting user cannot see).
+create or replace view public.units_all as select id, unit_code from public.units;
+grant select on public.units_all to anon, authenticated, service_role;

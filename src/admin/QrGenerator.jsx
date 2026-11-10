@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Check, Copy, ExternalLink, Loader2, Plus, Printer, QrCode, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, Copy, ExternalLink, Loader2, Plus, Printer, QrCode, Search, X } from 'lucide-react';
 import AppShell from '../components/AppShell.jsx';
 import { PhaseBadge, Spinner, useToast } from '../components/ui.jsx';
 import DoorFlyer from './DoorFlyer.jsx';
-import { createUnit, getMyUnits } from '../lib/dbService.js';
+import { createUnit, getUnitsPage } from '../lib/dbService.js';
 
 // QR codes encode VITE_PUBLIC_SITE_URL when it's set (so codes printed from a laptop open the deployed app),
 // otherwise the address this page is on (right on Vercel without any setting).
@@ -26,6 +26,7 @@ function siteCheck(site) {
 }
 const SITE_CHECK = siteCheck(SITE);
 
+const LIST_SIZE = 50;
 const blank = { buildingName: '', roomNumber: '', semester: 'Fall 2026', studentName: '', studentEmail: '' };
 
 export default function QrGenerator() {
@@ -36,12 +37,25 @@ export default function QrGenerator() {
   const [form, setForm] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [search, setSearch] = useState('');
+  const [total, setTotal] = useState(0);
+  const picked = useRef(null); // the room on the flyer, kept even when a search no longer lists it
 
+  // Rooms come one page at a time; the search box asks the database, so this works with thousands of rooms.
   useEffect(() => {
-    getMyUnits().then((u) => { setUnits(u); setCode(u[0]?.unit_code || ''); }).catch((e) => toast(e.message, 'error'));
-  }, [toast]);
+    let live = true;
+    const id = setTimeout(() => {
+      getUnitsPage({ search, page: 0, pageSize: LIST_SIZE }).then(({ units: list, total: n }) => {
+        if (!live) return;
+        setUnits(list);
+        setTotal(n);
+        setCode((c) => (list.some((u) => u.unit_code === c) || picked.current ? c : list[0]?.unit_code || ''));
+      }).catch((e) => toast(e.message, 'error'));
+    }, search ? 250 : 0);
+    return () => { live = false; clearTimeout(id); };
+  }, [search, toast]);
 
-  const unit = units?.find((u) => u.unit_code === code);
+  const unit = units?.find((u) => u.unit_code === code) || (picked.current?.unit_code === code ? picked.current : undefined);
   const url = unit ? `${SITE}/inspect/${unit.unit_code}` : '';
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const copy = async () => {
@@ -59,7 +73,9 @@ export default function QrGenerator() {
     setBusy(true);
     try {
       const u = await createUnit(form);
-      setUnits((list) => [...list, u].sort((a, b) => a.unit_code.localeCompare(b.unit_code)));
+      setUnits((list) => [...list.filter((x) => x.id !== u.id), u].sort((a, b) => a.unit_code.localeCompare(b.unit_code)));
+      setTotal((n) => n + 1);
+      picked.current = u;
       setCode(u.unit_code);
       setCreating(false);
       setForm(blank);
@@ -89,11 +105,17 @@ export default function QrGenerator() {
                   <h2 className="text-sm font-semibold">Room</h2>
                   <button onClick={() => setCreating(!creating)} aria-expanded={creating} className={`btn btn-sm ${creating ? 'btn-tone-cyan' : 'btn-outline'}`}>{creating ? <X size={14} /> : <Plus size={14} />} New unit</button>
                 </div>
+                {(total > 8 || search) && (
+                  <label className="relative mb-2 block">
+                    <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                    <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Room, building or student" aria-label="Search rooms" className="field pl-9 text-sm" />
+                  </label>
+                )}
                 <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1" role="radiogroup" aria-label="Room">
                   {units.map((u) => {
                     const on = u.unit_code === code;
                     return (
-                      <button key={u.id} type="button" role="radio" aria-checked={on} data-lit onClick={() => setCode(u.unit_code)}
+                      <button key={u.id} type="button" role="radio" aria-checked={on} data-lit onClick={() => { picked.current = u; setCode(u.unit_code); }}
                         className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-150 ${on ? 'is-on' : 'border-line bg-obsidian hover:bg-royal'}`}>
                         <span className={`flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors ${on ? 'border-cyan-400/60 bg-cyan-400/15 text-neon' : 'border-line text-muted-foreground'}`}><QrCode size={16} aria-hidden /></span>
                         <span className="min-w-0 flex-1">
@@ -104,7 +126,9 @@ export default function QrGenerator() {
                       </button>
                     );
                   })}
+                  {units.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">No rooms match that search.</p>}
                 </div>
+                {total > units.length && <p className="fact mt-2">Showing {units.length} of {total} rooms. Search to find the others.</p>}
               </div>
 
               {creating && (
