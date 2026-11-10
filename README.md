@@ -30,9 +30,9 @@ In mock mode a **"use a sample photo"** button replaces the camera (real mode ha
 1. In Supabase, run `supabase/migrations/001_schema.sql`, `002_policies.sql`, `003_seed.sql` (one query each, in order), create the 5 demo users in Authentication → Users (Auto Confirm), then run `004_demo_roles.sql`, `005_evidence_paths.sql`, `006_hardening.sql` and `008_server_fingerprints.sql`. Run `007_admin_mfa.sql` last, after the housing admin has set up two-factor on the site (see [`SECURITY.md`](SECURITY.md)).
 2. `cp .env.example .env.local` and fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_DEMO_PASSWORD`. Leave `VITE_PUBLIC_SITE_URL` empty unless you print QR codes from your laptop (then: your deployed link, never localhost).
 3. Check NVIDIA with one command: `node --no-warnings scripts/verify-nvidia.mjs` (needs `NVIDIA_API_KEY`), then deploy the three Edge Functions (`register-evidence` is required: photo uploads go through it; the two Nemotron ones are the AI): see [`supabase/functions/README.md`](supabase/functions/README.md).
-4. Optional: `node scripts/hash-seed.mjs` prints SQL that fingerprints the seed photos (green integrity badges). Re-run it if you replace a photo in `public/seed/`.
+4. Run `supabase/migrations/009_seed_photo_fingerprints.sql` so the seed photos show the green integrity badge. (`node scripts/hash-seed.mjs` regenerates that SQL: re-run it if you replace a photo in `public/seed/`.)
 
-The seed photos in `public/seed/` are drawn placeholders. **Replace them with real photos of a room** (under 150 KB, 1024 px wide) so Nemotron has something real to look at.
+The seed photos in `public/seed/` are AI-generated, realistic stand-ins (a door, a desk with a scratch and the same desk with a water ring, a sink with a hairline crack, blinds intact and broken). To use photos of a real room instead, keep them under 150 KB and 1024 px wide, then re-run `node scripts/hash-seed.mjs`.
 
 ## Deploy (this is what gives you a link that works on a phone)
 

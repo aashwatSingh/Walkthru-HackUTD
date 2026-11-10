@@ -37,6 +37,7 @@ for (const n of ['004', '005', '006', '007']) load(mig(n));
 load(mig('006'));                                       // safe to run twice
 load(mig('008'));
 load(mig('008'));                                       // safe to run twice
+load(mig('009'));
 for (const n of ['005', '006']) load(mig(n));           // re-running an older migration must not undo 008
 load(path.join(here, '02_helpers.sql'));
 
