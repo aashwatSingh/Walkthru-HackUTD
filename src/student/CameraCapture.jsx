@@ -1,5 +1,5 @@
 // src/student/CameraCapture.jsx  (used inside MediaCapture)
-// Live-camera-only capture for Walkthrough.
+// Live-camera-only capture for WalkThru.
 // There is NO <input type="file"> anywhere, so students cannot pick from the camera roll.
 // Photos are grabbed from the live video stream; videos are recorded with MediaRecorder.
 //

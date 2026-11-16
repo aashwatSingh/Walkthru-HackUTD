@@ -21,7 +21,7 @@ function siteCheck(site) {
     return { level: 'bad', text: `QR codes point to ${url.host}: phones can't open that. Deploy the app and print from the deployed site, or set VITE_PUBLIC_SITE_URL to your deployed link.` };
   }
   if (url.protocol !== 'https:') return { level: 'bad', text: `QR codes point to ${url.host} without https: phones won't open the camera there.` };
-  if (url.origin !== window.location.origin) return { level: 'info', text: `QR codes open ${url.host}, not this site. Make sure that's your deployed Walkthrough.` };
+  if (url.origin !== window.location.origin) return { level: 'info', text: `QR codes open ${url.host}, not this site. Make sure that's your deployed WalkThru.` };
   return null;
 }
 const SITE_CHECK = siteCheck(SITE);

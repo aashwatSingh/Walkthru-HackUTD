@@ -16,7 +16,7 @@ function unwrap({ data, error }) {
 async function loadProfile(id) {
   const profile = unwrap(await supabase.from('profiles').select('id, full_name, email, role').eq('id', id).maybeSingle());
   // An account made before the SQL ran (or outside the app) has no profile row: say so instead of a database error.
-  if (!profile) throw new Error('This account has no Walkthrough profile yet. Ask housing to add you.');
+  if (!profile) throw new Error('This account has no WalkThru profile yet. Ask housing to add you.');
   return profile;
 }
 export async function restoreSession() {

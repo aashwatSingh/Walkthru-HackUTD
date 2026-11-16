@@ -25,7 +25,7 @@ const FAQS = [
   { q: 'Can housing change the evidence after a student submits?', a: 'No. Once an inspection is locked, the database itself rejects edits to the photos, notes and timestamps, from students and admins alike. Every file also gets a SHA-256 fingerprint, so any change would show up.' },
   { q: 'Does the AI decide who pays?', a: 'No. Nemotron suggests a status for each item and explains why. The amount comes from a fixed fee schedule in code, and a housing admin approves every decision. Low-confidence calls are marked for a human.' },
   { q: 'What if a student disagrees with a charge?', a: 'They tap “Dispute this charge” and explain why. Nemotron prepares an evidence brief with both timestamps, and housing resolves it with a written comment the student can see.' },
-  { q: 'Is the report legally binding?', a: 'Walkthrough does not replace a lease or the school’s room condition form. It gives both sides an organized, timestamped record to attach to those forms and to any appeal.' },
+  { q: 'Is the report legally binding?', a: 'WalkThru does not replace a lease or the school’s room condition form. It gives both sides an organized, timestamped record to attach to those forms and to any appeal.' },
 ];
 
 // Which section is on screen, and how far down the page we are (for the header).

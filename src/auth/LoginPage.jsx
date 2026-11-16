@@ -70,7 +70,7 @@ export default function LoginPage() {
       <div className="animate-rise mb-6 flex items-center gap-3.5">
         <Mark size={48} className="shadow-[0_0_28px_rgb(0_240_255/0.25)]" />
         <div>
-          <h1 className="display text-[26px]">Walkthrough</h1>
+          <h1 className="display text-[26px]">WalkThru</h1>
           <p className="mt-1 text-sm text-muted-foreground">Sign in to your room’s inspection record.</p>
         </div>
       </div>

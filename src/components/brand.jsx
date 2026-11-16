@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ScanLine } from 'lucide-react';
-
-// The mark: a viewfinder reticle, the same corner brackets that frame every evidence photo.
-export function Mark({ size = 36, className = '' }) {
+// The WalkThru mark (public/brand/walkthrough-mark.png), in a viewfinder frame: the same corner brackets that
+// frame every evidence photo.
+export function Mark({ size = 44, className = '' }) {
   return (
     <span style={{ width: size, height: size }}
       className={`viewfinder viewfinder-sm flex shrink-0 items-center justify-center rounded-md border border-cyan-400/40 bg-cyan-400/10 text-neon transition-[box-shadow,border-color,background-color] duration-200 ${className}`}>
-      <ScanLine size={Math.round(size / 2)} />
+      <img src="/brand/walkthrough-mark.png" alt="" width={Math.round(size * 0.56)} height={Math.round(size * 0.56 * 437 / 292)} className="h-auto w-[56%] select-none" draggable={false} />
     </span>
   );
 }
@@ -16,7 +15,7 @@ export function Logo({ to = '/', className = '' }) {
   return (
     <Link to={to} className={`group flex items-center gap-2.5 rounded-md ${className}`}>
       <Mark className="group-hover:border-cyan-300 group-hover:bg-cyan-400/20 group-hover:shadow-[0_0_18px_rgb(0_240_255/0.45)]" />
-      <span className="display text-[17px] tracking-[-0.01em]">Walkthrough</span>
+      <span className="display text-[17px] tracking-[-0.01em]">WalkThru</span>
     </Link>
   );
 }

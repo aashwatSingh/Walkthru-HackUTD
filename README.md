@@ -1,4 +1,4 @@
-# Walkthrough (HackUTD)
+# WalkThru (HackUTD)
 
 Tamper-proof, timestamped move-in / move-out inspections for university housing, with an NVIDIA Nemotron inspection agent.
 A zero-download **web app**: a QR code on the door opens a guided photo checklist on the student's phone.
