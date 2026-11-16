@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 // The WalkThru mark (public/brand/walkthrough-mark.png), in a viewfinder frame: the same corner brackets that
 // frame every evidence photo.
-export function Mark({ size = 36, className = '' }) {
+export function Mark({ size = 44, className = '' }) {
   return (
     <span style={{ width: size, height: size }}
       className={`viewfinder viewfinder-sm flex shrink-0 items-center justify-center rounded-md border border-cyan-400/40 bg-cyan-400/10 text-neon transition-[box-shadow,border-color,background-color] duration-200 ${className}`}>
-      <img src="/brand/walkthrough-mark.png" alt="" width={Math.round(size * 0.5)} height={Math.round(size * 0.5 * 437 / 292)} className="h-auto w-1/2 select-none" draggable={false} />
+      <img src="/brand/walkthrough-mark.png" alt="" width={Math.round(size * 0.56)} height={Math.round(size * 0.56 * 437 / 292)} className="h-auto w-[56%] select-none" draggable={false} />
     </span>
   );
 }
