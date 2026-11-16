@@ -43,7 +43,7 @@ export default function ReportPage() {
       <article className="print-area panel mx-auto max-w-4xl space-y-5 p-5 sm:p-7 print:bg-white print:text-black">
         <header className="border-b border-line pb-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="kicker">Walkthrough · Official inspection record</p>
+            <p className="kicker">WalkThru · Official inspection record</p>
             <p className="font-mono text-[12px] text-neon">{unit.unit_code}</p>
           </div>
           <h1 className="display mt-2 text-[26px]">{unit.building_name} · Room {unit.room_number}</h1>

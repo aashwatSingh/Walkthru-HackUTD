@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Walkthrough design system: "evidence locker".
+/* WalkThru design system: "evidence locker".
    Near-black violet surfaces, quiet chrome. Neon is reserved for STATE: an element lights up when it is live,
    verified, selected, or under the pointer. Cyan = action / proof, violet = Nemotron (AI), emerald = verified,
    rose = billable, amber = disputed.

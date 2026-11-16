@@ -1,7 +1,7 @@
 # Edge Functions
 
 Three functions. `register-evidence` is part of every photo upload and has nothing to do with NVIDIA. The other two are
-the NVIDIA part of Walkthrough (spec Section 8): Nemotron runs inside the inspection workflow at two points; nobody chats with it.
+the NVIDIA part of WalkThru (spec Section 8): Nemotron runs inside the inspection workflow at two points; nobody chats with it.
 
 | Function | Who calls it | What it does |
 |---|---|---|
